@@ -9970,43 +9970,70 @@ var $ = require('zepto-browserify').Zepto,
 
 var Gibber = {
   Presets: {},
-  Audio:        require('../external/gibberish.2.0.min'),
-  Clock:        require('./clock'),
-  Seq:          require('./seq').Seq,
-  ScaleSeq:     require('./seq').ScaleSeq,
-  Theory:       require('./audio/theory'),
-  FX:           require('./audio/fx'),
-  Oscillators:  require('./audio/oscillators'),
-  Synths:       require('./audio/synths'),
-  Busses:       require('./audio/bus'),
-  Analysis:     require('./audio/analysis'),
-  Envelopes:    require('./audio/envelopes'),
-  Percussion:   require('./audio/drums'),
-  Input :       require('./audio/audio_input'),
-  Samplers:     require('./audio/sampler'),
-  PostProcessing:require('./audio/postprocessing'),
-  Utilities:    require( './utilities'),
-  Arp:          require( './audio/arp'),
+  Audio:          require('../external/gibberish.2.0.min'),
+  Clock:          require('./clock'),
+  Seq:            require('./seq').Seq,
+  ScaleSeq:       require('./seq').ScaleSeq,
+  Theory:         require('./audio/theory'),
+  FX:             require('./audio/fx'),
+  Oscillators:    require('./audio/oscillators'),
+  Synths:         require('./audio/synths'),
+  Busses:         require('./audio/bus'),
+  Analysis:       require('./audio/analysis'),
+  Envelopes:      require('./audio/envelopes'),
+  Percussion:     require('./audio/drums'),
+  Input :         require('./audio/audio_input'),
+  Samplers:       require('./audio/sampler'),
+  PostProcessing: require('./audio/postprocessing'),
+  Utilities:      require( './utilities'),
+  Arp:            require( './audio/arp'),
   scale : null,
   minNoteFrequency:50,
   started:false,
   
-  init: function() {                        
+  init: function( _options ) {                        
       // 'external/esprima' // does this need to be imported for the lib? hmmm...
+      var options = {
+        globalize: true,
+        canvas: null,
+      }
+      
+      if( typeof _options === 'object' ) {
+        $.extend( options, _options )
+      }
+      
       Gibber.Utilities.init()
       
-      $.extend( window, Gibber.Busses )       
-      $.extend( window, Gibber.Oscillators )
-      $.extend( window, Gibber.Synths )
-      $.extend( Gibber.Presets, Gibber.Synths.Presets )      
-      $.extend( window, Gibber.Percussion )
-      $.extend( Gibber.Presets, Gibber.Percussion.Presets )      
-      $.extend( window, Gibber.Envelopes )
-      $.extend( window, Gibber.FX )
-      $.extend( Gibber.Presets, Gibber.FX.Presets )      
-      $.extend( window, Gibber.Samplers )
-      $.extend( window, Gibber.PostProcessing )      
-      $.extend( window, Gibber.Theory )      
+      if( options.globalize ) {
+        $.extend( window, Gibber.Busses )       
+        $.extend( window, Gibber.Oscillators )
+        $.extend( window, Gibber.Synths )
+        $.extend( Gibber.Presets, Gibber.Synths.Presets )      
+        $.extend( window, Gibber.Percussion )
+        $.extend( Gibber.Presets, Gibber.Percussion.Presets )      
+        $.extend( window, Gibber.Envelopes )
+        $.extend( window, Gibber.FX )
+        $.extend( Gibber.Presets, Gibber.FX.Presets )      
+        $.extend( window, Gibber.Samplers )
+        $.extend( window, Gibber.PostProcessing )      
+        $.extend( window, Gibber.Theory )
+        
+      
+  			window.Clock = Gibber.Clock
+        window.Seq = Gibber.Seq
+        window.Arp = Gibber.Arp // move Arp to sequencers?
+        window.ScaleSeq = Gibber.ScaleSeq
+      
+        window.Rndi = Gibberish.Rndi
+        window.Rndf = Gibberish.Rndf      
+        window.rndi = Gibberish.rndi
+        window.rndf = Gibberish.rndf
+			
+  			window.module = Gibber.import
+        Gibber.Audio.Time.export()
+        window.sec = window.seconds
+        Gibber.Audio.Binops.export()
+      }
             
       !function( _$ ) {
         var o = _$( {} );
@@ -10020,9 +10047,6 @@ var Gibber = {
       window.$ = $
       
       Gibber.Audio.init()
-      Gibber.Audio.Time.export()
-      window.sec = window.seconds
-      Gibber.Audio.Binops.export()
       
       if( !Gibberish.context ) { Gibberish.context = { sampleRate:44100 } }
       
@@ -10033,13 +10057,17 @@ var Gibber = {
       }
       
 			//Gibber.Esprima = window.esprima
-      Gibber.Master = window.Master = Bus().connect( Gibberish.out )
+      Gibber.Master = Gibber.Busses.Bus().connect( Gibberish.out )
       
-      Master.type = 'Bus'
-      Master.name = 'Master'
+      if( options.globalize ) {
+        window.Master = Gibber.Master
+      }
       
-      $.extend( true, Master, Gibber.ugen ) 
-      Master.fx.ugen = Master
+      Gibber.Master.type = 'Bus'
+      Gibber.Master.name = 'Master'
+      
+      $.extend( true, Gibber.Master, Gibber.ugen ) 
+      Gibber.Master.fx.ugen = Gibber.Master
 
       Gibber.isInstrument = true// window.isInstrument // TODO: better way to do this without global?
       //Gibber.createMappingAbstractions( Master, Gibber.Busses.mappingProperties )
@@ -10059,20 +10087,8 @@ var Gibber = {
         //if( !window.isInstrument ) {
         //  Gibber.Clock.addMetronome( Gibber.Environment.Metronome )
         //}
-			window.Clock = Gibber.Clock
-      Gibber.scale = Scale( 'c4','Minor' )
+      Gibber.scale = Gibber.Theory.Scale( 'c4','Minor' )
       //})
-      
-      window.Seq = Gibber.Seq
-      window.Arp = Gibber.Arp // move Arp to sequencers?
-      window.ScaleSeq = Gibber.ScaleSeq
-      
-      window.Rndi = Gibberish.Rndi
-      window.Rndf = Gibberish.Rndf      
-      window.rndi = Gibberish.rndi
-      window.rndf = Gibberish.rndf
-			
-			window.module = Gibber.import
   },
   interfaceIsReady : function() {
     if( !Gibber.started ) {
@@ -10532,7 +10548,7 @@ var Gibber = {
       //Gibber.defineSequencedProperty( obj.seq.seqs[ seqNumber ].durations, 'reverse' )      
       
       if( !obj.seq.isRunning ) {
-        obj.seq.offset = Clock.time( obj.offset )
+        obj.seq.offset = Gibber.Clock.time( obj.offset )
         obj.seq.start( true, priority )
       }
       return obj

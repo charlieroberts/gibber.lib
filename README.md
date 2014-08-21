@@ -43,4 +43,4 @@ c = Mono('easyfx')
 
 Right now only audio works, but I'll be adding interaction and graphics soon. Also note that ```Drums``` do not work
 because I haven't figured out resource management yet and ```Drums``` uses audio samples. However, ```EDrums``` (which
-uses synthesis) works fine.
+uses synthesis) works fine. 
