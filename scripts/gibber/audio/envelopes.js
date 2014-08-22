@@ -2,7 +2,7 @@
   "use strict"
   
   var Envelopes = {},
-      Gibberish = require('../../external/gibberish.2.0.min'),
+      Gibberish = require('../../external/gibberish.2.0'),
       Clock = require('../clock'),
       curves = require('../mappings').outputCurves,
       LINEAR = curves.LINEAR,

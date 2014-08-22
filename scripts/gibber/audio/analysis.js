@@ -5,7 +5,7 @@
       mappingProperties = { 
         value:{ min: 0, max: 255, output: LOGARITHMIC, wrap:false, timescale: 'graphics' } 
       },
-      Gibberish = require('../../external/gibberish.2.0.min'),
+      Gibberish = require('../../external/gibberish.2.0'),
       curves = require('../mappings').outputCurves,
       LINEAR = curves.LINEAR,
       LOGARITHMIC = curves.LOGARITHMIC

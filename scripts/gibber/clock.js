@@ -6,7 +6,7 @@ var times = [],
     curves = require('./mappings').outputCurves,
     LINEAR = curves.LINEAR,
     LOGARITHMIC = curves.LOGARITHMIC, 
-    Gibberish = require('../external/gibberish.2.0.min')
+    Gibberish = require('../external/gibberish.2.0')
 
 var Clock = {
   seq : null, 

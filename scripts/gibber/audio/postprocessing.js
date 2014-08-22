@@ -2,7 +2,7 @@
   "use strict";
   
   var PostProcessing,
-      Gibberish = require('../../external/gibberish.2.0.min'),  
+      Gibberish = require('../../external/gibberish.2.0'),  
       compressor = null, 
       end = null,
       hishelf = null,

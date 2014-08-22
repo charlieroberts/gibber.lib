@@ -5,9 +5,16 @@
 
 var $ = require( './dollar' )
 
+if( typeof window === 'undefined' ) { // check for node.js
+  global.window = global // is this a good idea? makes a global window available in all files required in node
+  global.document = false
+}else if( global ) {
+  global.document = false
+}
+
 var Gibber = {
   Presets: {},
-  Audio:          require( '../external/gibberish.2.0.min' ),
+  Audio:          require( '../external/gibberish.2.0' ),
   Clock:          require( './clock' ),
   Seq:            require( './seq').Seq,
   ScaleSeq:       require( './seq').ScaleSeq,
@@ -62,10 +69,10 @@ var Gibber = {
         window.Arp = Gibber.Arp // move Arp to sequencers?
         window.ScaleSeq = Gibber.ScaleSeq
       
-        window.Rndi = Gibberish.Rndi
-        window.Rndf = Gibberish.Rndf      
-        window.rndi = Gibberish.rndi
-        window.rndf = Gibberish.rndf
+        window.Rndi = Gibber.Audio.Rndi
+        window.Rndf = Gibber.Audio.Rndf      
+        window.rndi = Gibber.Audio.rndi
+        window.rndf = Gibber.Audio.rndf
 			
   			window.module = Gibber.import
         Gibber.Audio.Time.export()
@@ -77,16 +84,16 @@ var Gibber = {
       
       Gibber.Audio.init()
       
-      if( !Gibberish.context ) { Gibberish.context = { sampleRate:44100 } }
+      if( !Gibber.Audio.context ) { Gibber.Audio.context = { sampleRate:44100 } }
       
       // post-processing depends on having context instantiated
-      Gibberish.onstart = function() {
+      Gibber.Audio.onstart = function() {
         Gibber.AudioPostProcessing.init()
         Gibber.interfaceIsReady()
       }
 
 			//Gibber.Esprima = window.esprima
-      Gibber.Master = Gibber.Busses.Bus().connect( Gibberish.out )
+      Gibber.Master = Gibber.Busses.Bus().connect( Gibber.Audio.out )
   
       if( options.globalize ) {
         window.Master = Gibber.Master
@@ -121,7 +128,7 @@ var Gibber = {
   },
   interfaceIsReady : function() {
     if( !Gibber.started ) {
-      if( typeof Gibberish.context.currentTime !== 'undefined' ) {
+      if( typeof Gibber.Audio.context.currentTime !== 'undefined' ) {
         Gibber.started = true
         if( Gibber.isInstrument ) eval( loadFile.text )
       }
@@ -167,7 +174,7 @@ var Gibber = {
     }
     return { done: function( fcn ) { _done =  fcn } }
  	},  
-  // override for gibberish method
+  // override for Gibber.Audio method
   defineUgenProperty : function(key, initValue, obj) {
     var isTimeProp = Gibber.Clock.timeProperties.indexOf(key) > -1,
         prop = obj.properties[key] = {
@@ -189,14 +196,14 @@ var Gibber = {
 
         prop.value = isTimeProp ? Gibber.Clock.time( val ) : val
         
-        Gibberish.dirty(obj);
+        Gibber.Audio.dirty(obj);
       },
     });
 
     obj[key] = prop.value
   },
   
-  // override for gibberish method
+  // override for Gibber.Audio method
   polyInit : function(ugen) {
     ugen.mod = ugen.polyMod;
     ugen.removeMod = ugen.removePolyMod;
@@ -219,7 +226,7 @@ var Gibber = {
     }
   },
   
-  // override for gibberish method to use master bus
+  // override for Gibber.Audio method to use master bus
   connect : function( bus, position ) {
     if( typeof bus === 'undefined' ) bus = Gibber.Master
     
@@ -349,8 +356,8 @@ var Gibber = {
   },
   
   stopAudio: function() {    
-    Gibberish.analysisUgens.length = 0
-    Gibberish.sequencers.length = 0
+    Gibber.Audio.analysisUgens.length = 0
+    Gibber.Audio.sequencers.length = 0
     
     for( var i = 0; i < Gibber.Master.inputs.length; i++ ) {
       Gibber.Master.inputs[ i ].value.disconnect()
@@ -780,7 +787,7 @@ var Gibber = {
         if( this.ugen !== Master ) {
           end.connect()
         }else{
-          end.connect( Gibberish.out )
+          end.connect( Gibber.Audio.out )
         }
                 
         return this.ugen
@@ -822,7 +829,7 @@ var Gibber = {
                   if( this.ugen !== Master ) {
                     this.ugen.connect( Gibber.Master )
                   }else{
-                    this.ugen.connect( Gibberish.out )
+                    this.ugen.connect( Gibber.Audio.out )
                   }
                 }
               }else{
@@ -832,7 +839,7 @@ var Gibber = {
                   if( this.ugen !== Master ) {
                     this.ugen.connect( Gibber.Master ) // no more fx
                   }else{
-                    this.ugen.connect( Gibberish.out )
+                    this.ugen.connect( Gibber.Audio.out )
                   }
                 }
               }
@@ -844,7 +851,7 @@ var Gibber = {
             if( this.ugen !== Master ) {
               this.ugen.connect( Gibber.Master )
             }else{
-              this.ugen.connect( Gibberish.out )
+              this.ugen.connect( Gibber.Audio.out )
             }
             this.ugen.codegen()
             this.length = 0
@@ -929,9 +936,9 @@ var Gibber = {
       }
 
       var time = Gibber.Clock.time( _time ),
-          decay = new Gibberish.ExponentialDecay({ decayCoefficient:.05, length:time }),
+          decay = new Gibber.Audio.ExponentialDecay({ decayCoefficient:.05, length:time }),
           //ramp = Mul( Sub(1,decay), endLevel )
-          line = new Gibberish.Line( 0, endLevel, time )
+          line = new Gibber.Audio.Line( 0, endLevel, time )
           
       this.amp = line
       
@@ -942,9 +949,9 @@ var Gibber = {
     
     fadeOut : function( _time ) {
       var time = Gibber.Clock.time( _time ),
-          decay = new Gibberish.ExponentialDecay({ decayCoefficient:.00005, length:time }),
+          decay = new Gibber.Audio.ExponentialDecay({ decayCoefficient:.00005, length:time }),
           //ramp = Mul( decay, this.amp() )
-          line = new Gibberish.Line( this.amp(), 0, Gibber.Clock.time( time ) )
+          line = new Gibber.Audio.Line( this.amp(), 0, Gibber.Clock.time( time ) )
           
       this.amp = line
       

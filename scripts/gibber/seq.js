@@ -2,7 +2,7 @@
   
   //"use strict"
   
-  var Gibberish = require('../external/gibberish.2.0.min'),
+  var Gibberish = require('../external/gibberish.2.0'),
       $ = require( './dollar' )//require('zepto-browserify').Zepto
   
   var doNotSequence = [ 'durations', 'target', 'scale', 'offset', 'doNotStart', 'priority' ]

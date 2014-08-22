@@ -295,13 +295,15 @@ Create a callback and start it running. Note that in iOS audio callbacks can onl
     start = function() {
       
       if( typeof audioContext !== 'undefined' ) {
-        document.getElementsByTagName('body')[0].removeEventListener('touchstart', start);
+        if( document )
+          document.getElementsByTagName('body')[0].removeEventListener('touchstart', start);
+          
         Gibberish.context = new audioContext();
         Gibberish.node = Gibberish.context.createScriptProcessor(bufferSize, 2, 2, Gibberish.context.sampleRate);	
         Gibberish.node.onaudioprocess = Gibberish.audioProcess;
         Gibberish.node.connect(Gibberish.context.destination);
     
-        if('ontouchstart' in document.documentElement){ // required to start audio under iOS 6
+        if( document && 'ontouchstart' in document.documentElement){ // required to start audio under iOS 6
           var mySource = Gibberish.context.createBufferSource();
           mySource.connect(Gibberish.context.destination);
           mySource.noteOn(0);
@@ -315,7 +317,7 @@ Create a callback and start it running. Note that in iOS audio callbacks can onl
       if( Gibberish.onstart ) Gibberish.onstart()
     }
     
-    if('ontouchstart' in document.documentElement) {
+    if( document && 'ontouchstart' in document.documentElement) {
       document.getElementsByTagName('body')[0].addEventListener('touchstart', start);
     }else{
       start();
