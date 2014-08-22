@@ -2,7 +2,7 @@
   "use strict"
 
 var teoria = require('../../external/teoria.min'),
-    $ = require('zepto-browserify').Zepto
+    $ = require( '../dollar' )//require('zepto-browserify').Zepto
 
 var Theory = {
   Teoria: teoria,

@@ -1,6 +1,6 @@
 (function() {
 //"use strict" // can't use strict because eval is used to evaluate user code in the run method
-var $ = require('zepto-browserify').Zepto,
+var $ = require( './dollar' ), //require('zepto-browserify').Zepto,
     Gibberish = require('../external/gibberish.2.0.min')
 
 var Gibber = {
@@ -39,7 +39,7 @@ var Gibber = {
       }
       
       Gibber.Utilities.init()
-      
+
       if( options.globalize ) {
         $.extend( window, Gibber.Busses )       
         $.extend( window, Gibber.Oscillators )
@@ -70,16 +70,15 @@ var Gibber = {
         window.sec = window.seconds
         Gibber.Audio.Binops.export()
       }
-            
-      !function( _$ ) {
-        var o = _$( {} );
-
-        _$.subscribe = function() { o.on.apply( o, arguments ) }
-        _$.unsubscribe = function() { o.off.apply( o, arguments ) }
-        _$.publish = function() { o.trigger.apply( o, arguments ) }
-
-      }( $ )
-      
+      // !function( _$ ) {
+      //   var o = _$( {} );
+      // 
+      //   _$.subscribe = function() { o.on.apply( o, arguments ) }
+      //   _$.unsubscribe = function() { o.off.apply( o, arguments ) }
+      //   _$.publish = function() { o.trigger.apply( o, arguments ) }
+      // 
+      // }( $ )
+      // 
       window.$ = $
       
       Gibber.Audio.init()
@@ -91,20 +90,20 @@ var Gibber = {
         Gibber.AudioPostProcessing.init()
         Gibber.interfaceIsReady()
       }
-      
+
 			//Gibber.Esprima = window.esprima
       Gibber.Master = Gibber.Busses.Bus().connect( Gibberish.out )
-      
+  
       if( options.globalize ) {
         window.Master = Gibber.Master
       }
-      
+
       Gibber.Master.type = 'Bus'
       Gibber.Master.name = 'Master'
-      
+
       $.extend( true, Gibber.Master, Gibber.ugen ) 
       Gibber.Master.fx.ugen = Gibber.Master
-
+      
       Gibber.isInstrument = true// window.isInstrument // TODO: better way to do this without global?
       //Gibber.createMappingAbstractions( Master, Gibber.Busses.mappingProperties )
       

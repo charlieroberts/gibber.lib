@@ -1,7 +1,7 @@
 !function() {
   "use strict"
   
-  var $ = require('zepto-browserify').Zepto,
+  var $ = require( '../dollar' ),//require('zepto-browserify').Zepto,
       Gibberish = require('../../external/gibberish.2.0.min'),
       curves = require('../mappings').outputCurves,
       LINEAR = curves.LINEAR,

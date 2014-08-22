@@ -23,9 +23,7 @@ Here's an example HTML file that plays a simple drum beat, bass line, and random
   <script src='build/gibber.lib.js'></script>
 </head>
 
-<body>
-  <canvas id='gibbercanvas'></canvas>
-</body>
+<body></body>
 
 <script>
 Gibber.init() // REQUIRED!

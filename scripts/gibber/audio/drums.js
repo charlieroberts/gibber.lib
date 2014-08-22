@@ -380,7 +380,6 @@
         case 'string':
           var notes = props[0], _seqs = [], _durations = [], __durations = [], seqs = notes.split('|'), timeline = {}
           
-          console.log(seqs)
           for( var i = 0; i < seqs.length; i++ ) {
             var seq = seqs[i], duration, hasTime = false, idx = seq.indexOf(',')
 

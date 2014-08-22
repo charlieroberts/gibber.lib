@@ -3,7 +3,7 @@
   //"use strict"
   
   var Gibberish = require('../external/gibberish.2.0.min'),
-      $ = require('zepto-browserify').Zepto
+      $ = require( './dollar' )//require('zepto-browserify').Zepto
   
   var doNotSequence = [ 'durations', 'target', 'scale', 'offset', 'doNotStart', 'priority' ]
 
@@ -74,10 +74,10 @@
   var Seq = function() {
     var obj = {}, seq, hasScale, keyList = []
     
-    if( $.type( arguments[0] ) === 'object' ) {
+    if( typeof arguments[0]  === 'object' ) {
       var arg = arguments[0],
-          durationsType = $.type( arg.durations ),
-          targetsType = $.type( arg.target ),
+          durationsType = typeof arg.durations,
+          targetsType = typeof arg.target ,
           priority = arg.priority,
           hasScale
       

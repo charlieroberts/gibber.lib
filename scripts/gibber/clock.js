@@ -2,7 +2,7 @@
   
 "use strict"
 var times = [],
-    $ = require('zepto-browserify').Zepto,
+    $ = require( './dollar' ),//require('zepto-browserify').Zepto,
     curves = require('./mappings').outputCurves,
     LINEAR = curves.LINEAR,
     LOGARITHMIC = curves.LOGARITHMIC, 
