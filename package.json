@@ -1,6 +1,6 @@
 {
   "name": "gibber.lib",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "standalone libraries from Gibber to include in web pages",
   "repository": {
     "type": "git",
@@ -28,6 +28,14 @@
     "sequencing",
     "gibber"
   ],
-  "author": "Charlie Roberts <charlie@charlie-roberts.com> (http://www.charlie-roberts.com/)",
-  "license": "MIT"
+  "author": {
+    "name": "Charlie Roberts",
+    "email": "charlie@charlie-roberts.com",
+    "url": "http://www.charlie-roberts.com/"
+  },
+  "license": "MIT",
+  "readme": "gibber.lib\n==========\n\nThis library provides the graphics and audio capabilities of Gibber without the code editing environment.\n\n## Installation (for development)\n\nYou can simply download the repo and skip straight to usage if you don't need to modify the library. If you want to modify gibber.lib, here's how to build it:\n\n1. If you don't have it, install npm (the node.js package manager) from http://npmjs.org\n2. Inside the top level of the repo, run `npm install` in the terminal.\n3. Run `gulp`.\n\nThe build outputs a single file, gibber.lib.js (also included in the repo). This file is minified to 188 KB in size.\n\n## Usage\nHere's an example HTML file that plays a simple drum beat, bass line, and random melody. It's included in the repo.\n\n```html\n<html>\n\n<head>\n  <script src='build/gibber.lib.js'></script>\n</head>\n\n<body></body>\n\n<script>\nGibber.init() // REQUIRED!\n\nGibber.scale.root.seq( ['c4','eb4'], 2)\n\na = Mono('bass').note.seq( [0,7], 1/8 )\n\nb = EDrums('xoxo')\nb.snare.snappy = 1\n\nc = Mono('easyfx')\n  .note.seq( Rndi(0,12), [1/4,1/8,1/2,1,2].rnd( 1/8,4 ) )\n</script>\n\n</html>\n```\n\nRight now only audio works, but I'll be adding interaction and graphics soon. Also note that `Drums` do not work because I haven't figured out resource management yet and `Drums` uses audio samples. However, `EDrums` (which uses synthesis) works fine. \n\nI'd eventually like to have three separate builds: one for audio, one for graphics, and one for both.",
+  "readmeFilename": "README.md",
+  "_id": "gibber.lib@0.1.1",
+  "_from": "gibber.lib@"
 }
