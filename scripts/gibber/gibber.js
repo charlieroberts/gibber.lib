@@ -1,7 +1,9 @@
 (function() {
-//"use strict" // can't use strict because eval is used to evaluate user code in the run method
-var $ = require( './dollar' ), //require('zepto-browserify').Zepto,
-    Gibberish = require('../external/gibberish.2.0.min')
+//"use strict" 
+// can't use strict because eval is used to evaluate user code in the run method
+// I should wrap this in a Function call instead...
+
+var $ = require( './dollar' )
 
 var Gibber = {
   Presets: {},
@@ -70,15 +72,7 @@ var Gibber = {
         window.sec = window.seconds
         Gibber.Audio.Binops.export()
       }
-      // !function( _$ ) {
-      //   var o = _$( {} );
-      // 
-      //   _$.subscribe = function() { o.on.apply( o, arguments ) }
-      //   _$.unsubscribe = function() { o.off.apply( o, arguments ) }
-      //   _$.publish = function() { o.trigger.apply( o, arguments ) }
-      // 
-      // }( $ )
-      // 
+
       window.$ = $
       
       Gibber.Audio.init()
