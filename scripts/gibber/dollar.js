@@ -2,14 +2,28 @@
 
 "use strict"
 
-var hasConflict = typeof $ === 'function' || typeof Zepto === 'function' || typeof jQuery === 'function'
-
-var $ = hasConflict ? Zepto || jQuery : {},
+var hasZepto = typeof Zepto === 'function',
+    hasJQuery = typeof jQuery === 'function',
+    has$ = typeof global.$ === 'object' || typeof global.$ === 'function',
+    $ = null,
+    hasConflict = hasZepto || hasJQuery || has$,
     isArray = Array.isArray,
     isObject = function( obj ) { return typeof obj === 'object' },
     isPlainObject = function( obj ) {
       return isObject(obj) && Object.getPrototypeOf( obj ) == Object.prototype
     }
+
+if( !hasConflict ) {
+  $ = {}
+}else if( hasJQuery ) {
+  $ = jQuery 
+}else if( hasZepto ) {
+  $ = Zepto
+}else if( has$ ){
+  $ = global.$
+}else{
+  $ = {}
+}
 
 if( !hasConflict ) {
   // taken from Zepto: zeptojs.com
