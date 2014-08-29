@@ -36,50 +36,50 @@ var Gibber = {
   minNoteFrequency:50,
   started:false,
   
+  export: function( target ) {
+    $.extend( target, Gibber.Busses )       
+    $.extend( target, Gibber.Oscillators )
+    $.extend( target, Gibber.Synths )
+    $.extend( Gibber.Presets, Gibber.Synths.Presets )      
+    $.extend( target, Gibber.Percussion )
+    $.extend( Gibber.Presets, Gibber.Percussion.Presets )      
+    $.extend( target, Gibber.Envelopes )
+    $.extend( target, Gibber.FX )
+    $.extend( Gibber.Presets, Gibber.FX.Presets )      
+    $.extend( target, Gibber.Samplers )
+    $.extend( target, Gibber.PostProcessing )      
+    $.extend( target, Gibber.Theory )
+    $.extend( target, Gibber.Analysis )        
+
+		target.Clock = Gibber.Clock
+    target.Seq = Gibber.Seq
+    target.Arp = Gibber.Arp // move Arp to sequencers?
+    target.ScaleSeq = Gibber.ScaleSeq
+
+    target.Rndi = Gibber.Audio.Rndi
+    target.Rndf = Gibber.Audio.Rndf      
+    target.rndi = Gibber.Audio.rndi
+    target.rndf = Gibber.Audio.rndf
+
+		target.module = Gibber.import
+    Gibber.Audio.Time.export( target )
+    target.sec = target.seconds
+    Gibber.Audio.Binops.export( target )    
+  },
+  
   init: function( _options ) {                        
       // 'external/esprima' // does this need to be imported for the lib? hmmm...
       var options = {
         globalize: true,
         canvas: null,
+        target: window
       }
       
-      if( typeof _options === 'object' ) {
-        $.extend( options, _options )
-      }
+      if( typeof _options === 'object' ) $.extend( options, _options )
       
       Gibber.Utilities.init()
 
-      if( options.globalize ) {
-        $.extend( window, Gibber.Busses )       
-        $.extend( window, Gibber.Oscillators )
-        $.extend( window, Gibber.Synths )
-        $.extend( Gibber.Presets, Gibber.Synths.Presets )      
-        $.extend( window, Gibber.Percussion )
-        $.extend( Gibber.Presets, Gibber.Percussion.Presets )      
-        $.extend( window, Gibber.Envelopes )
-        $.extend( window, Gibber.FX )
-        $.extend( Gibber.Presets, Gibber.FX.Presets )      
-        $.extend( window, Gibber.Samplers )
-        $.extend( window, Gibber.PostProcessing )      
-        $.extend( window, Gibber.Theory )
-        $.extend( window, Gibber.Analysis )        
-        
-      
-  			window.Clock = Gibber.Clock
-        window.Seq = Gibber.Seq
-        window.Arp = Gibber.Arp // move Arp to sequencers?
-        window.ScaleSeq = Gibber.ScaleSeq
-      
-        window.Rndi = Gibber.Audio.Rndi
-        window.Rndf = Gibber.Audio.Rndf      
-        window.rndi = Gibber.Audio.rndi
-        window.rndf = Gibber.Audio.rndf
-			
-  			window.module = Gibber.import
-        Gibber.Audio.Time.export()
-        window.sec = window.seconds
-        Gibber.Audio.Binops.export()
-      }
+      if( options.globalize ) Gibber.export( options.target )
 
       window.$ = $
       
@@ -97,7 +97,7 @@ var Gibber = {
       Gibber.Master = Gibber.Busses.Bus().connect( Gibber.Audio.out )
   
       if( options.globalize ) {
-        window.Master = Gibber.Master
+        options.target.Master = Gibber.Master
       }
 
       Gibber.Master.type = 'Bus'

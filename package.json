@@ -11,7 +11,8 @@
     "browserify": "~5.10.1",
     "vinyl-source-stream": "~0.1.1",
     "gulp-uglify": "~0.3.1",
-    "vinyl-buffer": "0.0.0"
+    "vinyl-buffer": "0.0.0",
+    "gulp-insert": "~0.4.0"
   },
   "dependencies": {
     "web-audio-api": "~0.1.5"
@@ -19,7 +20,7 @@
   "bugs": {
     "url": "https://github.com/charlieroberts/gibber.lib/issues"
   },
-  "main": "./scripts/gibber/gibber.js",
+  "main": "./build/gibber.lib.js",
   "scripts": {
     "test": "node ./scripts/tests/gibber.lib.node.test.js"
   },
