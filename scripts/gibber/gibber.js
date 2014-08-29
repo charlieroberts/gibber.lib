@@ -8,7 +8,7 @@ var $ = require( './dollar' )
 if( typeof window === 'undefined' ) { // check for node.js
   global.window = global // is this a good idea? makes a global window available in all files required in node
   global.document = false
-}else if( global ) {
+}else if( global && !global.document ) {
   global.document = false
 }
 
@@ -62,6 +62,7 @@ var Gibber = {
         $.extend( window, Gibber.Samplers )
         $.extend( window, Gibber.PostProcessing )      
         $.extend( window, Gibber.Theory )
+        $.extend( window, Gibber.Analysis )        
         
       
   			window.Clock = Gibber.Clock
