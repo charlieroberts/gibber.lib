@@ -25,20 +25,20 @@ if( !hasConflict ) {
   $ = {}
 }
 
-if( !hasConflict ) {
-  // taken from Zepto: zeptojs.com
-  function extend(target, source, deep) {
-    for (var key in source)
-      if (deep && (isPlainObject(source[key]) || isArray(source[key]))) {
-        if (isPlainObject(source[key]) && !isPlainObject(target[key]))
-          target[key] = {}
-        if (isArray(source[key]) && !isArray(target[key]))
-          target[key] = []
-        extend(target[key], source[key], deep)
-      }
-      else if (source[key] !== undefined) target[key] = source[key]
-  }
+// taken from Zepto: zeptojs.com
+function extend(target, source, deep) {
+  for (var key in source)
+    if (deep && (isPlainObject(source[key]) || isArray(source[key]))) {
+      if (isPlainObject(source[key]) && !isPlainObject(target[key]))
+        target[key] = {}
+      if (isArray(source[key]) && !isArray(target[key]))
+        target[key] = []
+      extend(target[key], source[key], deep)
+    }
+    else if (source[key] !== undefined) target[key] = source[key]
+}
 
+if( !hasConflict ) {
   // Copy all but undefined properties from one or more
   // objects to the `target` object.
   $.extend = function( target ){
