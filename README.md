@@ -3,24 +3,26 @@ gibber.lib
 
 This library provides the graphics and audio capabilities of Gibber without the code editing environment.
 
-## Installation (for development)
+## Building (for development)
 
-You can simply download the repo and skip straight to usage if you don't need to modify the library. If you want to modify gibber.lib and use a `<script>` tag, here's how to build it:
+You can simply download the repo and skip straight to the usage section if you don't need to modify the library. If you want to modify gibber.lib, here's how to build it:
 
 1. If you don't have it, install npm (the node.js package manager) from http://npmjs.org
 2. Inside the top level of the repo, run `npm install` in the terminal.
-3. Run `gulp`.
+3. Run `gulp`. This is a build module that is installed in step 2.
 
-The build outputs a single file, gibber.lib.js (also included in the repo). This file is minified to 188 KB in size.
+The build outputs two files that come pre-built with the repo. `gibber.lib.js` is for use with node or client CommonJS (browserify). `gibber.client.lib.js` can be included in any standard HTML file via a script tag.
 
 ## Usage
-Here's an example HTML file that plays a simple drum beat, bass line, and random melody. It's included in the repo uses the pre-built library.
+There are two library files that come with Gibber; they are almost identical, however, `gibber.client.lib.js` has a couple of lines of code added to it that make it easy to use in the browser. The other file, `gibber.lib.js` runs in node or with browserify. Just use `gibber.client.lib.js` if you're working in a HTML page and are unsure of which to use.
+
+Here's an example HTML file that plays a simple drum beat, bass line, and random melody.
 
 ```html
 <html>
 
 <head>
-  <script src='build/gibber.lib.js'></script>
+  <script src='build/gibber.client.lib.js'></script>
 </head>
 
 <body></body>
@@ -28,13 +30,17 @@ Here's an example HTML file that plays a simple drum beat, bass line, and random
 <script>
 Gibber.init() // REQUIRED!
 
+// change root of global scale every other measure
 Gibber.scale.root.seq( ['c4','eb4'], 2)
 
+// create bass synth and sequence ocatve bass line
 a = Mono('bass').note.seq( [0,7], 1/8 )
 
+// simple kick / snare drum pattern
 b = EDrums('xoxo')
 b.snare.snappy = 1
 
+// create lead synth and sequence with random notes/durations
 c = Mono('easyfx')
   .note.seq( Rndi(0,12), [1/4,1/8,1/2,1,2].rnd( 1/8,4 ) )
 </script>
@@ -42,10 +48,10 @@ c = Mono('easyfx')
 </html>
 ```
 
-If you want to use browserify / commonjs, just use the following to start things off:
+If you want to use CommonJS (node or browserify), just use the following to start things off *assuming you have the module installed):
 
 ```js
-Gibber = require( './scripts/gibber/gibber.js' )
+Gibber = require( 'gibber.lib' )
 Gibber.init()
 ``` 
 
