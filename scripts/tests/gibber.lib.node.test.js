@@ -2,11 +2,11 @@
 AudioContext = require('web-audio-api').AudioContext
 
 // must be global! this should be fixable.
-Gibber = require('../gibber/gibber.js')
+Gibber = require('../../build/gibber.lib.js')
 
 console.log( 'This is a test of using gibber.lib in node (it also works in the browser). If you hear beats, the test passed. ctrl+c to exit.' )
 
-Gibber.init()
+Gibber.init({ target:global})
 
 Gibber.scale.root.seq( ['c4','eb4'], 2)
 

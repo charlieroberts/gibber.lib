@@ -1,1 +1,1 @@
-window.Gibber = window.G = require( './gibber/gibber.js' )
+require( './gibber/gibber.js' )

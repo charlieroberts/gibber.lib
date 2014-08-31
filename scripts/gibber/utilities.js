@@ -226,14 +226,17 @@ var soloGroup = [],
     
       	return this
       },
+      gibberArray: function( arr ) {
+        
+      },
       init: function() {
-        window.solo = Utilities.solo
-        window.future = Utilities.future // TODO: fix global reference
+        // window.solo = Utilities.solo
+        // window.future = Utilities.future // TODO: fix global reference
         Array.prototype.random = Array.prototype.rnd = Utilities.random
         Array.prototype.weight = Utilities.weight
         Array.prototype.fill = Utilities.fill
         Array.prototype.choose = Utilities.choose
-        Array.prototype.Rnd = Utilities.random2
+        // Array.prototype.Rnd = Utilities.random2
         Array.prototype.merge = Utilities.merge
       }  
     }

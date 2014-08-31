@@ -5,13 +5,6 @@
 
 var $ = require( './dollar' )
 
-if( typeof window === 'undefined' ) { // check for node.js
-  global.window = global // is this a good idea? makes a global window available in all files required in node
-  global.document = false
-}else if( global && !global.document ) {
-  global.document = false
-}
-
 var Gibber = {
   Presets: {},
   Audio:          require( '../external/gibberish.2.0' ),
@@ -50,7 +43,10 @@ var Gibber = {
     $.extend( target, Gibber.PostProcessing )      
     $.extend( target, Gibber.Theory )
     $.extend( target, Gibber.Analysis )        
-
+    
+    target.future = Gibber.Utilities.future
+    target.solo = Gibber.Utilities.solo    
+    
 		target.Clock = Gibber.Clock
     target.Seq = Gibber.Seq
     target.Arp = Gibber.Arp // move Arp to sequencers?
@@ -68,7 +64,13 @@ var Gibber = {
   },
   
   init: function( _options ) {                        
-      // 'external/esprima' // does this need to be imported for the lib? hmmm...
+      if( typeof window === 'undefined' ) { // check for node.js
+        window = GLOBAL // is this a good idea? makes a global window available in all files required in node
+        document = GLOBAL.document = false
+      }else if( typeof GLOBAL !== 'undefined' ) { // I can't remember why I put this in there...
+        if( !GLOBAL.document ) document = GLOBAL.document = false
+      }
+      
       var options = {
         globalize: true,
         canvas: null,
@@ -76,13 +78,12 @@ var Gibber = {
       }
       
       if( typeof _options === 'object' ) $.extend( options, _options )
-      
-      Gibber.Utilities.init()
 
       if( options.globalize ) Gibber.export( options.target )
-
-      window.$ = $
       
+      window.$ = $ // geez louise
+            
+      Gibber.Utilities.init()
       Gibber.Audio.init()
       
       if( !Gibber.Audio.context ) { Gibber.Audio.context = { sampleRate:44100 } }
