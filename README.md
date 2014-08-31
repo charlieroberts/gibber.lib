@@ -11,18 +11,16 @@ You can simply download the repo and skip straight to the usage section if you d
 2. Inside the top level of the repo, run `npm install` in the terminal.
 3. Run `gulp`. This is a build module that is installed in step 2.
 
-The build outputs two files that come pre-built with the repo. `gibber.lib.js` is for use with node or client CommonJS (browserify). `gibber.client.lib.js` can be included in any standard HTML file via a script tag.
+The build outputs a single UMD file, gibber.lib.js.
 
 ## Usage
-There are two library files that come with Gibber; they are almost identical, however, `gibber.client.lib.js` has a couple of lines of code added to it that make it easy to use in the browser. The other file, `gibber.lib.js` runs in node or with browserify. Just use `gibber.client.lib.js` if you're working in a HTML page and are unsure of which to use.
-
-Here's an example HTML file that plays a simple drum beat, bass line, and random melody.
+The library can be used with plain script tags, CommonJS or AMD style includes. Below is an example HTML file that plays a simple drum beat, bass line, and random melody.
 
 ```html
 <html>
 
 <head>
-  <script src='build/gibber.client.lib.js'></script>
+  <script src='build/gibber.lib.js'></script>
 </head>
 
 <body></body>
@@ -33,7 +31,7 @@ Gibber.init() // REQUIRED!
 // change root of global scale every other measure
 Gibber.scale.root.seq( ['c4','eb4'], 2)
 
-// create bass synth and sequence ocatve bass line
+// create bass synth and sequence eighth note octaves
 a = Mono('bass').note.seq( [0,7], 1/8 )
 
 // simple kick / snare drum pattern
@@ -48,7 +46,7 @@ c = Mono('easyfx')
 </html>
 ```
 
-If you want to use CommonJS (node or browserify), just use the following to start things off *assuming you have the module installed):
+If you want to use CommonJS (node or browserify), just use the following to start things off (assuming you have the module installed):
 
 ```js
 Gibber = require( 'gibber.lib' )
