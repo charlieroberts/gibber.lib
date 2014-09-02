@@ -3134,13 +3134,13 @@ var Gibber = {
         target: window
       }
       
-      if( typeof _options === 'object' ) $.extend( options, _options )
-      
       Gibber.Utilities.Rndi = Gibber.Audio.Rndi
       Gibber.Utilities.Rndf = Gibber.Audio.Rndf
       Gibber.Utilities.rndi = Gibber.Audio.rndi
       Gibber.Utilities.rndf = Gibber.Audio.rndf
       
+      if( typeof _options === 'object' ) $.extend( options, _options )
+
       $.extend( Gibber.Presets, Gibber.Synths.Presets )
       $.extend( Gibber.Presets, Gibber.Percussion.Presets )
       $.extend( Gibber.Presets, Gibber.FX.Presets )
