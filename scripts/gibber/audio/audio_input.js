@@ -2,7 +2,8 @@
   "use strict"
   
   var Input = {},
-      Gibberish = require('../../external/gibberish.2.0'),
+      Gibberish = require( 'gibberish-dsp' ),
+      Gibber,
       curves = require('../mappings').outputCurves,
       LINEAR = curves.LINEAR,
       LOGARITHMIC = curves.LOGARITHMIC,
@@ -50,7 +51,6 @@
     return oscillator
   }
   
-  module.exports = Input
+  module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Input }
+
 }()
-
-

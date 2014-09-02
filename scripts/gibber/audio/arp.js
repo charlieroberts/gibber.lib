@@ -20,6 +20,7 @@ b = Arp('c2m7', _32, 'updown2', 4).slave(s);
   
 var theory = require('../../external/teoria.min'),
     Seq    = require('../seq'),
+    Gibber,
     Arp
     
 Arp = function(notation, beats, pattern, mult, scale) {	
@@ -153,6 +154,6 @@ Arp = function(notation, beats, pattern, mult, scale) {
 	return that;
 }
 
-module.exports = Arp
+module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Arp }
 
 }()

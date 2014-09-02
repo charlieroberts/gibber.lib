@@ -6,29 +6,17 @@ var browserify = require( 'gulp-browserify' ),
     rename = require( 'gulp-rename' ),
     insert = require( 'gulp-insert' );
 
-// gulp.task( 'node', function(){
-//   var out = browserify({
-//     entries: [ './scripts/gibber/gibber.js' ]
-//   })
-// 
-//   out.bundle()
-//     .pipe( source('gibber.lib.js') )
-//     .pipe( buffer() )
-//     .pipe( uglify() )
-//     .pipe( gulp.dest('./build/') )
-// 
-//   return out
-// });
-
 gulp.task( 'client', function(){
-    return gulp.src( './scripts/gibber/gibber.js' , {read:false} )
-    .pipe( browserify({
-      standalone:'Gibber'
-    }) )
-    // .pipe( buffer() )
-    .pipe( uglify() )
+  var out = gulp.src( './scripts/gibber/gibber.js' , {read:false} )
+    .pipe( browserify({ standalone:'Gibber' }) )
     .pipe( rename('gibber.lib.js') )
     .pipe( gulp.dest('./build/') )
+    .pipe( buffer() )
+    .pipe( uglify() )
+    .pipe( rename('gibber.lib.min.js') )
+    .pipe( gulp.dest('./build/') )
+    
+    return out
 });
 
 gulp.task( 'default', ['client'] )

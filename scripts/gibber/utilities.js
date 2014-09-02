@@ -3,9 +3,10 @@
 
 var soloGroup = [],
     isSoloing = false,
+    Gibber,
     Synths = { Presets: {} },
-    Gibberish = require('../external/gibberish.2.0'),
-    Clock = require('./clock'),
+    Gibberish = require( 'gibberish-dsp' ),
+    Clock = require('./clock')( Gibber ),
 
     Utilities = {
       seq : function() {
@@ -54,7 +55,7 @@ var soloGroup = [],
               lastChosen = null;
             };
           }else{
-            index = rndi(0, this.length - 1);
+            index = Utilities.rndi(0, this.length - 1);
             value = this[index];
             if( typeof dict[ ""+value ] !== 'undefined' ) {
               dict[ ""+value ].count = 1;
@@ -90,7 +91,7 @@ var soloGroup = [],
               lastChosen = null;
             };
           }else{
-            index = rndi(0, that.length - 1);
+            index = Utilities.rndi(0, that.length - 1);
             value = that[index];
             if( typeof dict[ ""+value ] !== 'undefined' ) {
               dict[ ""+value ].count = 1;
@@ -115,12 +116,12 @@ var soloGroup = [],
           var arr = []
     
           for( var i = 0; i < length; i++ ) {
-            arr[ i ] = this[ rndi( 0, this.length - 1 ) ]
+            arr[ i ] = this[ Utilities.rndi( 0, this.length - 1 ) ]
           }
       
           output = arr
         }else{
-          output = this[ rndi( 0, this.length - 1 ) ]
+          output = this[ Utilities.rndi( 0, this.length - 1 ) ]
         }
     
       	return output;
@@ -136,7 +137,7 @@ var soloGroup = [],
               __seq.disconnect();
             }
           ],
-          durations:[ Clock.time( time ) ]
+          durations:[ Gibber.Clock.time( time ) ]
         }).start()
     
         return function(){ __seq.stop(); __seq.disconnect(); }
@@ -212,7 +213,7 @@ var soloGroup = [],
         this.pick = function() {
           var returnValue = this[0],
               total = 0,
-              _rnd = rndf();
+              _rnd = Utilities.rndf();
   
           for(var i = 0; i < weights.length; i++) {
             total += weights[i];
@@ -241,6 +242,6 @@ var soloGroup = [],
       }  
     }
 
-module.exports = Utilities
+  module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Utilities }
 
 }()

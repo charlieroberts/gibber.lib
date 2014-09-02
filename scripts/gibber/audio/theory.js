@@ -2,7 +2,8 @@
   "use strict"
 
 var teoria = require('../../external/teoria.min'),
-    $ = require( '../dollar' )//require('zepto-browserify').Zepto
+    $ = require( '../dollar' ),
+    Gibber
 
 var Theory = {
   Teoria: teoria,
@@ -295,7 +296,7 @@ var Theory = {
 
 }
 
-module.exports = Theory
+module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Theory; }
 //window.Scale = Gibber.Theory.Scale
 
 }()

@@ -2,10 +2,10 @@
   
   //"use strict"
   
-  var Gibberish = require('../external/gibberish.2.0'),
-      $ = require( './dollar' )//require('zepto-browserify').Zepto
-  
-  var doNotSequence = [ 'durations', 'target', 'scale', 'offset', 'doNotStart', 'priority' ]
+  var Gibberish = require( 'gibberish-dsp' ),
+      Gibber,
+      $ = require( './dollar' ),
+      doNotSequence = [ 'durations', 'target', 'scale', 'offset', 'doNotStart', 'priority' ]
 
   var makeNoteFunction = function( notes, obj ) {
     var _note = $.extend( [], notes ),
@@ -162,6 +162,7 @@
     }
       
     seq = new Gibberish.PolySeq( obj )
+    seq.timeModifier = Gibber.Clock.time.bind( Gibber.Clock )
 		seq.name = 'Seq'
     seq.save = {}
     
@@ -306,7 +307,8 @@
     return Seq( args )
   }
   
-  module.exports.Seq = Seq
-  module.exports.ScaleSeq = ScaleSeq  
+  var Seqs = { 'Seq': Seq, 'ScaleSeq':ScaleSeq }
+
+  module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Seqs }
   
 }()

@@ -2,8 +2,9 @@
   "use strict"
   
   var Synths = { Presets: {} },
-      Gibberish = require('../../external/gibberish.2.0'),
-      Clock = require('../clock'),
+      Gibberish = require( 'gibberish-dsp' ),
+      Gibber,
+      Clock = require('../clock')( Gibber ),
       curves = require('../mappings').outputCurves,
       LINEAR = curves.LINEAR,
       LOGARITHMIC = curves.LOGARITHMIC
@@ -212,8 +213,8 @@
   Synths.Presets.Synth = {
   	short:  { attack: 44, decay: 1/16, },
   	bleep:  { waveform:'Sine', attack:44, decay:1/16 },
-    rhodes: { waveform:'Sine', maxVoices:4, presetInit: function() { this.fx.add( Tremolo(2, .2) ) }, attack:44, decay:1 },
-    calvin: { waveform:'PWM',  maxVoices:4, amp:.075, presetInit: function() { this.fx.add( Delay(1/6,.5), Vibrato() ) }, attack:44, decay:1/4 }    
+    rhodes: { waveform:'Sine', maxVoices:4, presetInit: function() { this.fx.add( Gibber.FX.Tremolo(2, .2) ) }, attack:44, decay:1 },
+    calvin: { waveform:'PWM',  maxVoices:4, amp:.075, presetInit: function() { this.fx.add( Gibber.FX.Delay(1/6,.5), Gibber.FX.Vibrato() ) }, attack:44, decay:1/4 }    
   }
   
   Synths.Presets.Synth2 = {
@@ -225,7 +226,7 @@
   	short : { attack: 44, decay: 1/16,},
   
   	lead : {
-  		presetInit : function() { this.fx.add( Delay(1/4, .35), Reverb() ) },
+  		presetInit : function() { this.fx.add( Gibber.FX.Delay(1/4, .35), Gibber.FX.Reverb() ) },
   		attack: 1/8,
   		decay:1/2,
   		octave3:0,
@@ -238,7 +239,7 @@
   	winsome : {
   		presetInit : function() { 
         //this.fx.add( Delay(1/4, .35), Reverb() ) 
-        this.lfo = Sine( .234375 )._
+        this.lfo = Gibber.Oscillators.Sine( .234375 )._
         
         this.lfo.amp = .075
         this.lfo.frequency = 2
@@ -272,7 +273,7 @@
     },
   
   	easy : {
-  		attack:Clock.maxMeasures,
+  		attack: Clock.maxMeasures,
   		decay:2,
   		octave2:0,
   		octave3:0,
@@ -281,10 +282,10 @@
   	},
     
   	easyfx : {
-  		attack:Clock.maxMeasures,
+  		attack: Clock.maxMeasures,
   		decay:2,
       presetInit: function() {
-        this.fx.add( Delay(1/6, .3) )
+        this.fx.add( Gibber.FX.Delay(1/6, .3) )
       },
       amp:.3,
   		octave2:0,
@@ -318,7 +319,7 @@
       detune3:0,
       detune2:0,
       filterMult:0,
-      presetInit: function() { this.fx.add( Gain(.1), Delay(1/6,.35) ) }
+      presetInit: function() { this.fx.add( Gibber.FX.Gain(.1), Gibber.FX.Delay(1/6,.35) ) }
     },
   }
   
@@ -331,8 +332,8 @@
 			decay	: 1/8,
       amp:.1,
       presetInit: function() {
-        this.bus = Bus().fx.add( Delay(1/8,.75), LPF({ resonance:4 }) )
-        this.bus.fx[1].cutoff = Add(.25, Sine(.1,.2)._ )
+        this.bus = Gibber.Busses.Bus().fx.add( Gibber.FX.Delay(1/8,.75), Gibber.FX.LPF({ resonance:4 }) )
+        this.bus.fx[1].cutoff = Gibber.Binops.Add(.25, Gibber.Oscilators.Sine(.1,.2)._ )
         this.send( this.bus, .65 )
       },
     },
@@ -400,5 +401,6 @@
 		}
 	};
   
-  module.exports = Synths
+  module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Synths }
+
 }()

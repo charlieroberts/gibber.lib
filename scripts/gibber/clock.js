@@ -6,7 +6,8 @@ var times = [],
     curves = require('./mappings').outputCurves,
     LINEAR = curves.LINEAR,
     LOGARITHMIC = curves.LOGARITHMIC, 
-    Gibberish = require('../external/gibberish.2.0')
+    Gibberish = require( 'gibberish-dsp' ),
+    Gibber
 
 var Clock = {
   seq : null, 
@@ -46,7 +47,7 @@ var Clock = {
       Clock.metronome.draw( Clock.currentBeat, Clock.signature.upper )
     }
     
-    Clock.phase += Gibber.Clock.beats( 1 )
+    Clock.phase += Clock.beats( 1 )
   },
   
   getTimeSinceStart : function() {
@@ -118,14 +119,16 @@ var Clock = {
       })
     }
     
-    this.seq = new Gibberish.PolySeq({
+    Clock.seq = new Gibberish.PolySeq({
       seqs : [{
-        target:this,
-        values: [ this.processBeat ],
+        target:Clock,
+        values: [ Clock.processBeat.bind( Clock ) ],
         durations:[ 1/4 ],
       }],
-      rate: this,
-    }).connect().start()
+      rate: Clock,
+    })
+    Clock.seq.connect().start()
+    Clock.seq.timeModifier = Clock.time.bind( Clock )
   },
   
   addMetronome: function( metronome ) {
@@ -141,7 +144,7 @@ var Clock = {
     }else{
       timeInSamples = v
     }
-    
+        
     return timeInSamples
   },
   
@@ -171,7 +174,7 @@ var Clock = {
   }
 }
 
-module.exports = Clock
+module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Clock; }
 
 })()
 

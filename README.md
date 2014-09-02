@@ -29,9 +29,10 @@ The library can be used with plain script tags, CommonJS or AMD style includes. 
 Gibber.init() // REQUIRED!
 
 // change root of global scale every other measure
+// this will affect both bass and lead parts
 Gibber.scale.root.seq( ['c4','eb4'], 2)
 
-// create bass synth and sequence eighth note octaves
+// create bass monosynth and sequence 1/8 note octaves
 a = Mono('bass').note.seq( [0,7], 1/8 )
 
 // simple kick / snare drum pattern

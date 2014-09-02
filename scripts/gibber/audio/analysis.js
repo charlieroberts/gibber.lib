@@ -5,7 +5,8 @@
       mappingProperties = { 
         value:{ min: 0, max: 255, output: LOGARITHMIC, wrap:false, timescale: 'graphics' } 
       },
-      Gibberish = require('../../external/gibberish.2.0'),
+      Gibberish = require( 'gibberish-dsp' ),
+      Gibber,
       curves = require('../mappings').outputCurves,
       LINEAR = curves.LINEAR,
       LOGARITHMIC = curves.LOGARITHMIC
@@ -70,5 +71,6 @@
     }
   }
 
-  module.exports = Analysis
+  module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Analysis }
+  
 }()

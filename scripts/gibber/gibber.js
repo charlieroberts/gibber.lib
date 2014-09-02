@@ -7,24 +7,8 @@ var $ = require( './dollar' )
 
 var Gibber = {
   Presets: {},
-  Audio:          require( '../external/gibberish.2.0' ),
-  Clock:          require( './clock' ),
-  Seq:            require( './seq').Seq,
-  ScaleSeq:       require( './seq').ScaleSeq,
-  Theory:         require( './audio/theory' ),
-  FX:             require( './audio/fx' ),
-  Oscillators:    require( './audio/oscillators' ),
-  Synths:         require( './audio/synths' ),
-  Busses:         require( './audio/bus' ),
-  Analysis:       require( './audio/analysis' ),
-  Envelopes:      require( './audio/envelopes' ),
-  Percussion:     require( './audio/drums' ),
-  Input :         require( './audio/audio_input' ),
-  Samplers:       require( './audio/sampler' ),
-  PostProcessing: require( './audio/postprocessing' ),
-  Utilities:      require( './utilities' ),
-  Arp:            require( './audio/arp' ),
   GraphicsLib: {},
+  Binops: {},
   scale : null,
   minNoteFrequency:50,
   started:false,
@@ -33,16 +17,14 @@ var Gibber = {
     $.extend( target, Gibber.Busses )       
     $.extend( target, Gibber.Oscillators )
     $.extend( target, Gibber.Synths )
-    $.extend( Gibber.Presets, Gibber.Synths.Presets )      
     $.extend( target, Gibber.Percussion )
-    $.extend( Gibber.Presets, Gibber.Percussion.Presets )      
     $.extend( target, Gibber.Envelopes )
     $.extend( target, Gibber.FX )
-    $.extend( Gibber.Presets, Gibber.FX.Presets )      
+    $.extend( target, Gibber.Seqs )    
     $.extend( target, Gibber.Samplers )
     $.extend( target, Gibber.PostProcessing )      
     $.extend( target, Gibber.Theory )
-    $.extend( target, Gibber.Analysis )        
+    $.extend( target, Gibber.Analysis ) 
     
     target.future = Gibber.Utilities.future
     target.solo = Gibber.Utilities.solo    
@@ -52,10 +34,10 @@ var Gibber = {
     target.Arp = Gibber.Arp // move Arp to sequencers?
     target.ScaleSeq = Gibber.ScaleSeq
 
-    target.Rndi = Gibber.Audio.Rndi
-    target.Rndf = Gibber.Audio.Rndf      
-    target.rndi = Gibber.Audio.rndi
-    target.rndf = Gibber.Audio.rndf
+    target.Rndi = Gibber.Utilities.Rndi
+    target.Rndf = Gibber.Utilities.Rndf     
+    target.rndi = Gibber.Utilities.rndi
+    target.rndf = Gibber.Utilities.rndf
 
 		target.module = Gibber.import
     Gibber.Audio.Time.export( target )
@@ -78,12 +60,25 @@ var Gibber = {
       }
       
       if( typeof _options === 'object' ) $.extend( options, _options )
-
+      
+      Gibber.Utilities.Rndi = Gibber.Audio.Rndi
+      Gibber.Utilities.Rndf = Gibber.Audio.Rndf
+      Gibber.Utilities.rndi = Gibber.Audio.rndi
+      Gibber.Utilities.rndf = Gibber.Audio.rndf
+      
+      $.extend( Gibber.Presets, Gibber.Synths.Presets )
+      $.extend( Gibber.Presets, Gibber.Percussion.Presets )
+      $.extend( Gibber.Presets, Gibber.FX.Presets )
+      $.extend( Gibber.Presets, Gibber.FX.Presets )
+      
+      $.extend( Gibber.Binops, Gibber.Audio.Binops )
+      
       if( options.globalize ) Gibber.export( options.target )
       
       window.$ = $ // geez louise
             
       Gibber.Utilities.init()
+      
       Gibber.Audio.init()
       
       if( !Gibber.Audio.context ) { Gibber.Audio.context = { sampleRate:44100 } }
@@ -369,9 +364,9 @@ var Gibber = {
     
     Gibber.Clock.reset()
     
-    Master.fx.remove()
+    Gibber.Master.fx.remove()
     
-    Master.amp = 1
+    Gibber.Master.amp = 1
     
     console.log( 'Audio stopped.')
   },
@@ -513,7 +508,6 @@ var Gibber = {
     target.object.mappings.push( mapping )
     
     Gibber.defineSequencedProperty( target.object[ target.Name ], 'invert' )
-    
   },
   
   defineSequencedProperty : function( obj, key, priority ) {
@@ -529,7 +523,7 @@ var Gibber = {
     // }
     
     if( !obj.seq ) {
-      obj.seq = Gibber.Seq({ doNotStart:true, scale:obj.scale, priority:priority })
+      obj.seq = Gibber.Seqs.Seq({ doNotStart:true, scale:obj.scale, priority:priority })
     }
     
     fnc.seq = function( v,d ) {  
@@ -746,7 +740,7 @@ var Gibber = {
     obj.gibber = true // keyword identifying gibber object, needed for notation parser
     
     if( !obj.seq && shouldSeq ) {
-      obj.seq = Gibber.Seq({ doNotStart:true, scale:obj.scale })      
+      obj.seq = Gibber.Seqs.Seq({ doNotStart:true, scale:obj.scale })      
     }
     
     obj.mappingProperties = mappingProperties
@@ -786,7 +780,7 @@ var Gibber = {
           this.push( fx )
         }
         
-        if( this.ugen !== Master ) {
+        if( this.ugen !== Gibber.Master ) {
           end.connect()
         }else{
           end.connect( Gibber.Audio.out )
@@ -828,7 +822,7 @@ var Gibber = {
                 if( typeof this[ arg + 1 ] !== 'undefined' ) { // if there is another fx ahead in chain...
                   this[ arg + 1 ].input = arg === 0 ? this.ugen : this[ arg ]
                 }else{
-                  if( this.ugen !== Master ) {
+                  if( this.ugen !== Gibber.Master ) {
                     this.ugen.connect( Gibber.Master )
                   }else{
                     this.ugen.connect( Gibber.Audio.out )
@@ -838,7 +832,7 @@ var Gibber = {
                 if( this.length > 0 ) { // if there is an fx behind in chain
                   this[ arg - 1 ].connect( Gibber.Master )
                 }else{
-                  if( this.ugen !== Master ) {
+                  if( this.ugen !== Gibber.Master ) {
                     this.ugen.connect( Gibber.Master ) // no more fx
                   }else{
                     this.ugen.connect( Gibber.Audio.out )
@@ -850,7 +844,7 @@ var Gibber = {
         }else{ // remove all fx
           if( this.length > 0) {
             this[ this.length - 1 ].disconnect()
-            if( this.ugen !== Master ) {
+            if( this.ugen !== Gibber.Master ) {
               this.ugen.connect( Gibber.Master )
             }else{
               this.ugen.connect( Gibber.Audio.out )
@@ -963,6 +957,23 @@ var Gibber = {
     },
   }
 }
+
+Gibber.Audio =          require( 'gibberish-dsp' )
+Gibber.Clock =          require( './clock' )( Gibber )
+Gibber.Seqs =           require( './seq')( Gibber )
+Gibber.Theory =         require( './audio/theory' )( Gibber )
+Gibber.FX =             require( './audio/fx' )( Gibber )
+Gibber.Oscillators =    require( './audio/oscillators' )( Gibber )
+Gibber.Synths =         require( './audio/synths' )( Gibber )
+Gibber.Busses =         require( './audio/bus' )( Gibber )
+Gibber.Analysis =       require( './audio/analysis' )( Gibber )
+Gibber.Envelopes =      require( './audio/envelopes' )( Gibber )
+Gibber.Percussion =     require( './audio/drums' )( Gibber )
+Gibber.Input =          require( './audio/audio_input' )( Gibber )
+Gibber.Samplers =       require( './audio/sampler' )( Gibber )
+Gibber.PostProcessing = require( './audio/postprocessing' )( Gibber )
+Gibber.Utilities =      require( './utilities' )( Gibber )
+Gibber.Arp =            require( './audio/arp' )( Gibber )
 
 module.exports = Gibber
 

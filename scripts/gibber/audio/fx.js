@@ -2,7 +2,8 @@
   "use strict"
   
   var FX = { Presets: {} },
-      Gibberish = require('../../external/gibberish.2.0'),
+      Gibberish = require( 'gibberish-dsp' ),
+      Gibber,
       curves = require('../mappings').outputCurves,
       LINEAR = curves.LINEAR,
       LOGARITHMIC = curves.LOGARITHMIC
@@ -330,5 +331,6 @@
     }
   }
   
-  module.exports = FX
+  module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return FX }
+
 }()

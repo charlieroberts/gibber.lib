@@ -2,7 +2,8 @@
   "use strict"
   
   var Percussion = { Presets:{} }, 
-      Gibberish = require('../../external/gibberish.2.0'),
+      Gibberish = require( 'gibberish-dsp' ),
+      Gibber,
       Clock = require('../clock'),
       curves = require('../mappings').outputCurves,
       LINEAR = curves.LINEAR,
@@ -462,7 +463,7 @@
             kf = null
           }
 
-          kf = future( function() {
+          kf = Gibber.Utilities.future( function() {
               //obj.kick.disconnect()
               kcd = 1
               kf = null
@@ -483,7 +484,7 @@
             sf = null
           }
 
-          sf = future( function() {
+          sf = Gibber.Utilities.future( function() {
               //obj.snare.disconnect()
               scd = 1
               sf = null
@@ -503,7 +504,7 @@
             hf = null
           }
 
-          hf = future( function() {
+          hf = Gibber.Utilities.future( function() {
               //obj.hat.disconnect()
               hcd = 1
               hf = null
@@ -524,7 +525,7 @@
             hf = null
           }
 
-          hf = future( function() {
+          hf = Gibber.Utilities.future( function() {
               //obj.hat.disconnect()
               hcd = 1
               hf = null
@@ -594,7 +595,6 @@
   };
   Percussion.Drums.kits.default = Percussion.Drums.kits.electronic;
   
-  //Gibber.presets.Drums = {}
-
-  module.exports = Percussion
+  
+  module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Percussion }
 })()
