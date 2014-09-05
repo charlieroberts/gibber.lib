@@ -7,6 +7,7 @@
       },
       Gibberish = require( 'gibberish-dsp' ),
       Gibber,
+      $ = require( '../dollar' ),
       curves = require('../mappings').outputCurves,
       LINEAR = curves.LINEAR,
       LOGARITHMIC = curves.LOGARITHMIC

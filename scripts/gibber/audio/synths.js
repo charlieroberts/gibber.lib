@@ -4,6 +4,7 @@
   var Synths = { Presets: {} },
       Gibberish = require( 'gibberish-dsp' ),
       Gibber,
+      $ = require( '../dollar' ),
       Clock = require('../clock')( Gibber ),
       curves = require('../mappings').outputCurves,
       LINEAR = curves.LINEAR,

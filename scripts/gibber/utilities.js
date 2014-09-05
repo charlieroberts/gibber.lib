@@ -4,6 +4,7 @@
 var soloGroup = [],
     isSoloing = false,
     Gibber,
+    $ = require( './dollar' ),
     Synths = { Presets: {} },
     Gibberish = require( 'gibberish-dsp' ),
     Clock = require('./clock')( Gibber ),

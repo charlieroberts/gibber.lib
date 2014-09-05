@@ -1,7 +1,8 @@
 !function() {
   "use strict"
   
-  var Oscillators = { Presets: {} },
+  var $ = require( '../dollar' ),
+      Oscillators = { Presets: {} },
       Gibberish = require( 'gibberish-dsp' ),
       Gibber,
       curves = require('../mappings').outputCurves,

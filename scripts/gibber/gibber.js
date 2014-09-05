@@ -75,23 +75,30 @@ var Gibber = {
       
       if( options.globalize ) Gibber.export( options.target )
       
-      window.$ = $ // geez louise
+      options.target.$ = $ // geez louise
             
       Gibber.Utilities.init()
       
-      Gibber.Audio.init()
+      // post-processing depends on having context instantiated
+      var __onstart = null
+      if( Gibber.Audio.onstart ) __onstart = Gibber.Audio.onstart
       
       if( !Gibber.Audio.context ) { Gibber.Audio.context = { sampleRate:44100 } }
       
-      // post-processing depends on having context instantiated
       Gibber.Audio.onstart = function() {
-        Gibber.AudioPostProcessing.init()
-        Gibber.interfaceIsReady()
+  			//Gibber.Esprima = window.esprima
+        //Gibber.AudioPostProcessing.init()
+        //Gibber.interfaceIsReady()
+        
+        Gibber.Clock.start( true )
+                
+        if( __onstart !== null ) { __onstart() }
       }
-
-			//Gibber.Esprima = window.esprima
+      
+      Gibber.Audio.init()
+      
       Gibber.Master = Gibber.Busses.Bus().connect( Gibber.Audio.out )
-  
+
       if( options.globalize ) {
         options.target.Master = Gibber.Master
       }
@@ -116,7 +123,6 @@ var Gibber = {
       Gibber.Audio.defineUgenProperty = Gibber.defineUgenProperty
       
       //$script.ready('environment', function() {
-      Gibber.Clock.start( true )
         //if( !window.isInstrument ) {
         //  Gibber.Clock.addMetronome( Gibber.Environment.Metronome )
         //}

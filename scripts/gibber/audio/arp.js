@@ -19,6 +19,7 @@ b = Arp('c2m7', _32, 'updown2', 4).slave(s);
 !function() {
   
 var theory = require('../../external/teoria.min'),
+    $ = require( '../dollar' ),
     Seq    = require('../seq'),
     Gibber,
     Arp
