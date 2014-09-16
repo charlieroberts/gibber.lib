@@ -446,7 +446,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
       Gibberish = _dereq_( 'gibberish-dsp' ),
       Gibber,
       $ = _dereq_( '../dollar' ),
-      Clock = _dereq_('../clock'),
+      Clock = _dereq_('../clock')(),
       curves = _dereq_('../mappings').outputCurves,
       LINEAR = curves.LINEAR,
       LOGARITHMIC = curves.LOGARITHMIC, 
@@ -1049,7 +1049,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
       Gibberish = _dereq_( 'gibberish-dsp' ),
       Gibber,
       $ = _dereq_( '../dollar' ),
-      Clock = _dereq_('../clock'),
+      Clock = _dereq_('../clock')(),
       curves = _dereq_('../mappings').outputCurves,
       LINEAR = curves.LINEAR,
       LOGARITHMIC = curves.LOGARITHMIC,
@@ -1085,7 +1085,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
       Envelopes[ name ] = function() {
         var args = Array.prototype.slice.call(arguments, 0),
             obj
-            
+        
         obj = new Gibberish[ type ]( args[0], args[1], Clock.time( args[2] ), args[3] )
         //obj.type = 'Env'
         obj.name = name
@@ -1863,7 +1863,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
       Gibberish = _dereq_( 'gibberish-dsp' ),
       Gibber,
       $ = _dereq_( '../dollar' ),
-      Clock = _dereq_('../clock'),
+      Clock = _dereq_('../clock')(),
       curves = _dereq_('../mappings').outputCurves,
       LINEAR = curves.LINEAR,
       LOGARITHMIC = curves.LOGARITHMIC
@@ -2098,7 +2098,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
       Gibberish = _dereq_( 'gibberish-dsp' ),
       Gibber,
       $ = _dereq_( '../dollar' ),
-      Clock = _dereq_('../clock')( Gibber ),
+      Clock = _dereq_('../clock')(),
       curves = _dereq_('../mappings').outputCurves,
       LINEAR = curves.LINEAR,
       LOGARITHMIC = curves.LOGARITHMIC
@@ -2982,9 +2982,6 @@ var Clock = {
 module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Clock; }
 
 })()
-
-
-
 },{"./dollar":16,"./mappings":18,"gibberish-dsp":1}],16:[function(_dereq_,module,exports){
 (function (global){
 !function() {

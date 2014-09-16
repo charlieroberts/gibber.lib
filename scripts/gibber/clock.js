@@ -177,5 +177,3 @@ var Clock = {
 module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Clock; }
 
 })()
-
-

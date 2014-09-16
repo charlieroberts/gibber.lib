@@ -5,7 +5,7 @@
       Gibberish = require( 'gibberish-dsp' ),
       Gibber,
       $ = require( '../dollar' ),
-      Clock = require('../clock'),
+      Clock = require('../clock')(),
       curves = require('../mappings').outputCurves,
       LINEAR = curves.LINEAR,
       LOGARITHMIC = curves.LOGARITHMIC,
@@ -41,7 +41,7 @@
       Envelopes[ name ] = function() {
         var args = Array.prototype.slice.call(arguments, 0),
             obj
-            
+        
         obj = new Gibberish[ type ]( args[0], args[1], Clock.time( args[2] ), args[3] )
         //obj.type = 'Env'
         obj.name = name
