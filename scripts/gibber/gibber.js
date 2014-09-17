@@ -17,7 +17,10 @@ var Gibber = {
     
     target.future = Gibber.Utilities.future
     target.solo = Gibber.Utilities.solo    
-
+    
+    Gibber.Utilities.rndi = Gibber.Audio.Core.rndi
+    Gibber.Utilities.rndf = Gibber.Audio.Core.rndf    
+    
     target.Rndi = Gibber.Utilities.Rndi
     target.Rndf = Gibber.Utilities.Rndf     
     target.rndi = Gibber.Utilities.rndi
@@ -53,17 +56,11 @@ var Gibber = {
         options.target.Master = Audio.Master
       }
 
-      $.extend( Gibber.Presets, Gibber.Audio.Synths.Presets )
-      $.extend( Gibber.Presets, Gibber.Audio.Percussion.Presets )
-      $.extend( Gibber.Presets, Gibber.Audio.FX.Presets )
-      $.extend( Gibber.Presets, Gibber.Audio.FX.Presets )
-      
       $.extend( Gibber.Binops, Gibber.Audio.Binops )
-            
+    
       if( options.globalize ) {
-        console.log("GLOBALIZE")
         Gibber.export( options.target )
-        Gibber.Audio._export( Gibber )
+        Gibber.Audio._export( Gibber )  
         Gibber.Audio._export( options.target )
       }
       
@@ -71,14 +68,11 @@ var Gibber = {
             
       Gibber.Utilities.init()
       
+      Gibber.Clock = Gibber.Audio.Clock
       Gibber.isInstrument = true// window.isInstrument // TODO: better way to do this without global?
-      //Gibber.createMappingAbstractions( Master, Gibber.Busses.mappingProperties )
-      
-      // override so that all ugens connect to Gibber's Master bus by default
-
-      //})
-      //Gibber.scale = Gibber.Audio.scale
-      //Gibber.Theory = Gibber.Audio.
+      $.extend( Gibber.Presets, Gibber.Audio.Synths.Presets )
+      $.extend( Gibber.Presets, Gibber.Audio.Percussion.Presets )
+      $.extend( Gibber.Presets, Gibber.Audio.FX.Presets )
   },
   interfaceIsReady : function() {
     if( !Gibber.started ) {
@@ -245,7 +239,7 @@ var Gibber = {
   },
   
   clear : function() {
-    this.stopAudio();
+    Gibber.Audio.clear();
     
     if( Gibber.Graphics ) Gibber.Graphics.clear()
 

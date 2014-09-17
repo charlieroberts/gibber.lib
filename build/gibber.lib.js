@@ -16,7 +16,6 @@ var times = [],
 Audio = {
   // can't name export as Gibberish has the same name
   _export: function( target ) {
-    console.log("AUDIO EXPORT" )
     $.extend( target, Audio.Busses )       
     $.extend( target, Audio.Oscillators )
     $.extend( target, Audio.Synths )
@@ -27,9 +26,7 @@ Audio = {
     $.extend( target, Audio.Samplers )
     $.extend( target, Audio.PostProcessing )
     
-    console.log("THEORY", Audio.Theory )
     target.Theory = Audio.Theory
-    // $.extend( target, Audio.Theory )
     $.extend( target, Audio.Analysis ) 
     
     // target.future = Gibber.Utilities.future
@@ -57,8 +54,7 @@ Audio = {
     
     if( !Audio.context ) { Audio.context = { sampleRate:44100 } }
     
-    Audio.onstart = function() {
-      console.log( -4 )
+    Audio.Core.onstart = function() {
       Audio.Clock.start( true )
               
       if( __onstart !== null ) { __onstart() }
@@ -75,13 +71,15 @@ Audio = {
     Audio.Master.fx.ugen = Audio.Master
     
     Audio.ugenTemplate.connect = 
-      Audio._oscillator.connect =
-      Audio._synth.connect =
-      Audio._effect.connect =
-      Audio._bus.connect =
+      Audio.Core._oscillator.connect =
+      Audio.Core._synth.connect =
+      Audio.Core._effect.connect =
+      Audio.Core._bus.connect =
       Audio.connect;
       
-    Audio.defineUgenProperty = Audio.defineUgenProperty    
+    Audio.Core.defineUgenProperty = Audio.defineUgenProperty
+        
+    $.extend( Audio, Audio.Core )
   },
   // override for Gibber.Audio method
   defineUgenProperty : function(key, initValue, obj) {
@@ -105,7 +103,7 @@ Audio = {
 
         prop.value = isTimeProp ? Audio.Clock.time( val ) : val
         
-        Audio.dirty( obj )
+        Audio.Core.dirty( obj )
       },
     });
 
@@ -146,6 +144,24 @@ Audio = {
     }
     
     return this
+  },
+  clear: function() {
+    Audio.analysisUgens.length = 0
+    Audio.sequencers.length = 0
+  
+    for( var i = 0; i < Audio.Master.inputs.length; i++ ) {
+      Audio.Master.inputs[ i ].value.disconnect()
+    }
+  
+    Audio.Master.inputs.length = 0
+  
+    Audio.Clock.reset()
+  
+    Audio.Master.fx.remove()
+  
+    Audio.Master.amp = 1
+  
+    console.log( 'Audio stopped.')
   },
   ugenTemplate: {
     sequencers : [],
@@ -340,33 +356,12 @@ Audio = {
       
       return this
     },
-    
-    stop: function() {
-      Audio.analysisUgens.length = 0
-      Audio.sequencers.length = 0
-    
-      for( var i = 0; i < Audio.Master.inputs.length; i++ ) {
-        Audio.Master.inputs[ i ].value.disconnect()
-      }
-    
-      Audio.Master.inputs.length = 0
-    
-      Audio.Clock.reset()
-    
-      Audio.Master.fx.remove()
-    
-      Audio.Master.amp = 1
-    
-      console.log( 'Audio stopped.')
-    }
   }
 }
 
 Audio.Core = _dereq_( 'gibberish-dsp' )
 Audio.Core._init = Audio.Core.init.bind( Audio.Core )
 delete Audio.Core.init
-
-$.extend( Audio, Audio.Core )
 
 Audio.Clock =          _dereq_( './clock' )( Gibber )
 Audio.Seqs =           _dereq_( './seq')( Gibber )
@@ -2687,8 +2682,8 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
   Synths.Presets.Synth = {
   	short:  { attack: 44, decay: 1/16, },
   	bleep:  { waveform:'Sine', attack:44, decay:1/16 },
-    rhodes: { waveform:'Sine', maxVoices:4, presetInit: function() { this.fx.add( Gibber.FX.Tremolo(2, .2) ) }, attack:44, decay:1 },
-    calvin: { waveform:'PWM',  maxVoices:4, amp:.075, presetInit: function() { this.fx.add( Gibber.FX.Delay(1/6,.5), Gibber.FX.Vibrato() ) }, attack:44, decay:1/4 }    
+    rhodes: { waveform:'Sine', maxVoices:4, presetInit: function() { this.fx.add( Gibber.Audio.FX.Tremolo(2, .2) ) }, attack:44, decay:1 },
+    calvin: { waveform:'PWM',  maxVoices:4, amp:.075, presetInit: function() { this.fx.add( Gibber.Audio.FX.Delay(1/6,.5), Gibber.Audio.FX.Vibrato() ) }, attack:44, decay:1/4 }    
   }
   
   Synths.Presets.Synth2 = {
@@ -2700,7 +2695,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
   	short : { attack: 44, decay: 1/16,},
   
   	lead : {
-  		presetInit : function() { this.fx.add( Gibber.FX.Delay(1/4, .35), Gibber.FX.Reverb() ) },
+  		presetInit : function() { this.fx.add( Gibber.Audio.FX.Delay(1/4, .35), Gibber.Audio.FX.Reverb() ) },
   		attack: 1/8,
   		decay:1/2,
   		octave3:0,
@@ -2713,7 +2708,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
   	winsome : {
   		presetInit : function() { 
         //this.fx.add( Delay(1/4, .35), Reverb() ) 
-        this.lfo = Gibber.Oscillators.Sine( .234375 )._
+        this.lfo = Gibber.Audio.Oscillators.Sine( .234375 )._
         
         this.lfo.amp = .075
         this.lfo.frequency = 2
@@ -2759,7 +2754,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
   		attack: Clock.maxMeasures,
   		decay:2,
       presetInit: function() {
-        this.fx.add( Gibber.FX.Delay(1/6, .3) )
+        this.fx.add( Gibber.Audio.FX.Delay( Clock.time(1/6), .3) )
       },
       amp:.3,
   		octave2:0,
@@ -2793,7 +2788,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
       detune3:0,
       detune2:0,
       filterMult:0,
-      presetInit: function() { this.fx.add( Gibber.FX.Gain(.1), Gibber.FX.Delay(1/6,.35) ) }
+      presetInit: function() { this.fx.add( Gibber.Audio.FX.Gain(.1), Gibber.Audio.FX.Delay(1/6,.35) ) }
     },
   }
   
@@ -2806,8 +2801,8 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
 			decay	: 1/8,
       amp:.1,
       presetInit: function() {
-        this.bus = Gibber.Busses.Bus().fx.add( Gibber.FX.Delay(1/8,.75), Gibber.FX.LPF({ resonance:4 }) )
-        this.bus.fx[1].cutoff = Gibber.Binops.Add(.25, Gibber.Oscilators.Sine(.1,.2)._ )
+        this.bus = Gibber.Busses.Bus().fx.add( Gibber.Audio.FX.Delay(1/8,.75), Gibber.Audio.FX.LPF({ resonance:4 }) )
+        this.bus.fx[1].cutoff = Gibber.Binops.Add(.25, Gibber.Audio.Oscillators.Sine(.1,.2)._ )
         this.send( this.bus, .65 )
       },
     },
@@ -3475,7 +3470,10 @@ var Gibber = {
     
     target.future = Gibber.Utilities.future
     target.solo = Gibber.Utilities.solo    
-
+    
+    Gibber.Utilities.rndi = Gibber.Audio.Core.rndi
+    Gibber.Utilities.rndf = Gibber.Audio.Core.rndf    
+    
     target.Rndi = Gibber.Utilities.Rndi
     target.Rndf = Gibber.Utilities.Rndf     
     target.rndi = Gibber.Utilities.rndi
@@ -3511,17 +3509,11 @@ var Gibber = {
         options.target.Master = Audio.Master
       }
 
-      $.extend( Gibber.Presets, Gibber.Audio.Synths.Presets )
-      $.extend( Gibber.Presets, Gibber.Audio.Percussion.Presets )
-      $.extend( Gibber.Presets, Gibber.Audio.FX.Presets )
-      $.extend( Gibber.Presets, Gibber.Audio.FX.Presets )
-      
       $.extend( Gibber.Binops, Gibber.Audio.Binops )
-            
+    
       if( options.globalize ) {
-        console.log("GLOBALIZE")
         Gibber.export( options.target )
-        Gibber.Audio._export( Gibber )
+        Gibber.Audio._export( Gibber )  
         Gibber.Audio._export( options.target )
       }
       
@@ -3529,14 +3521,11 @@ var Gibber = {
             
       Gibber.Utilities.init()
       
+      Gibber.Clock = Gibber.Audio.Clock
       Gibber.isInstrument = true// window.isInstrument // TODO: better way to do this without global?
-      //Gibber.createMappingAbstractions( Master, Gibber.Busses.mappingProperties )
-      
-      // override so that all ugens connect to Gibber's Master bus by default
-
-      //})
-      //Gibber.scale = Gibber.Audio.scale
-      //Gibber.Theory = Gibber.Audio.
+      $.extend( Gibber.Presets, Gibber.Audio.Synths.Presets )
+      $.extend( Gibber.Presets, Gibber.Audio.Percussion.Presets )
+      $.extend( Gibber.Presets, Gibber.Audio.FX.Presets )
   },
   interfaceIsReady : function() {
     if( !Gibber.started ) {
@@ -3703,7 +3692,7 @@ var Gibber = {
   },
   
   clear : function() {
-    this.stopAudio();
+    Gibber.Audio.clear();
     
     if( Gibber.Graphics ) Gibber.Graphics.clear()
 

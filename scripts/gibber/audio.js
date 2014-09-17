@@ -9,7 +9,6 @@ var times = [],
 Audio = {
   // can't name export as Gibberish has the same name
   _export: function( target ) {
-    console.log("AUDIO EXPORT" )
     $.extend( target, Audio.Busses )       
     $.extend( target, Audio.Oscillators )
     $.extend( target, Audio.Synths )
@@ -20,9 +19,7 @@ Audio = {
     $.extend( target, Audio.Samplers )
     $.extend( target, Audio.PostProcessing )
     
-    console.log("THEORY", Audio.Theory )
     target.Theory = Audio.Theory
-    // $.extend( target, Audio.Theory )
     $.extend( target, Audio.Analysis ) 
     
     // target.future = Gibber.Utilities.future
@@ -50,8 +47,7 @@ Audio = {
     
     if( !Audio.context ) { Audio.context = { sampleRate:44100 } }
     
-    Audio.onstart = function() {
-      console.log( -4 )
+    Audio.Core.onstart = function() {
       Audio.Clock.start( true )
               
       if( __onstart !== null ) { __onstart() }
@@ -68,13 +64,15 @@ Audio = {
     Audio.Master.fx.ugen = Audio.Master
     
     Audio.ugenTemplate.connect = 
-      Audio._oscillator.connect =
-      Audio._synth.connect =
-      Audio._effect.connect =
-      Audio._bus.connect =
+      Audio.Core._oscillator.connect =
+      Audio.Core._synth.connect =
+      Audio.Core._effect.connect =
+      Audio.Core._bus.connect =
       Audio.connect;
       
-    Audio.defineUgenProperty = Audio.defineUgenProperty    
+    Audio.Core.defineUgenProperty = Audio.defineUgenProperty
+        
+    $.extend( Audio, Audio.Core )
   },
   // override for Gibber.Audio method
   defineUgenProperty : function(key, initValue, obj) {
@@ -98,7 +96,7 @@ Audio = {
 
         prop.value = isTimeProp ? Audio.Clock.time( val ) : val
         
-        Audio.dirty( obj )
+        Audio.Core.dirty( obj )
       },
     });
 
@@ -139,6 +137,24 @@ Audio = {
     }
     
     return this
+  },
+  clear: function() {
+    Audio.analysisUgens.length = 0
+    Audio.sequencers.length = 0
+  
+    for( var i = 0; i < Audio.Master.inputs.length; i++ ) {
+      Audio.Master.inputs[ i ].value.disconnect()
+    }
+  
+    Audio.Master.inputs.length = 0
+  
+    Audio.Clock.reset()
+  
+    Audio.Master.fx.remove()
+  
+    Audio.Master.amp = 1
+  
+    console.log( 'Audio stopped.')
   },
   ugenTemplate: {
     sequencers : [],
@@ -333,33 +349,12 @@ Audio = {
       
       return this
     },
-    
-    stop: function() {
-      Audio.analysisUgens.length = 0
-      Audio.sequencers.length = 0
-    
-      for( var i = 0; i < Audio.Master.inputs.length; i++ ) {
-        Audio.Master.inputs[ i ].value.disconnect()
-      }
-    
-      Audio.Master.inputs.length = 0
-    
-      Audio.Clock.reset()
-    
-      Audio.Master.fx.remove()
-    
-      Audio.Master.amp = 1
-    
-      console.log( 'Audio stopped.')
-    }
   }
 }
 
 Audio.Core = require( 'gibberish-dsp' )
 Audio.Core._init = Audio.Core.init.bind( Audio.Core )
 delete Audio.Core.init
-
-$.extend( Audio, Audio.Core )
 
 Audio.Clock =          require( './clock' )( Gibber )
 Audio.Seqs =           require( './seq')( Gibber )
