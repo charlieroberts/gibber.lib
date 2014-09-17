@@ -8,7 +8,7 @@ var times = [],
 
 Audio = {
   // can't name export as Gibberish has the same name
-  _export: function( target ) {
+  export: function( target ) {
     $.extend( target, Audio.Busses )       
     $.extend( target, Audio.Oscillators )
     $.extend( target, Audio.Synths )
@@ -30,15 +30,15 @@ Audio = {
     target.Arp = Audio.Arp // move Arp to sequencers?
     target.ScaleSeq = Audio.ScaleSeq
 
-    target.Rndi = Audio.Rndi
-    target.Rndf = Audio.Rndf     
-    target.rndi = Audio.rndi
-    target.rndf = Audio.rndf
+    target.Rndi = Audio.Core.Rndi
+    target.Rndf = Audio.Core.Rndf     
+    target.rndi = Audio.Core.rndi
+    target.rndf = Audio.Core.rndf
 
 		target.module = Gibber.import
-    Audio.Time.export( target )
+    Audio.Core.Time.export( target )
     target.sec = target.seconds
-    Audio.Binops.export( target )    
+    Audio.Core.Binops.export( target )    
   },
   init: function() {
     // post-processing depends on having context instantiated
@@ -53,7 +53,14 @@ Audio = {
       if( __onstart !== null ) { __onstart() }
     }
     
+    Gibber.Clock = Audio.Clock
+          
+    Gibber.Theory = Audio.Theory
+    Gibber.Theory.scale = Gibber.scale = Gibber.Audio.Theory.Scale( 'c4','Minor' )
+    
     Audio.Core._init()
+    
+    $.extend( Gibber.Binops, Audio.Binops )
     
     Audio.Master = Audio.Busses.Bus().connect( Audio.Core.out )
 
@@ -71,8 +78,15 @@ Audio = {
       Audio.connect;
       
     Audio.Core.defineUgenProperty = Audio.defineUgenProperty
-        
-    $.extend( Audio, Audio.Core )
+    
+    $.extend( Gibber.Presets, Audio.Synths.Presets )
+    $.extend( Gibber.Presets, Audio.Percussion.Presets )
+    $.extend( Gibber.Presets, Audio.FX.Presets )
+    
+    //$.extend( Audio, Audio.Core )
+    
+    console.log("PRESETS", Audio.Synths.Presets, Gibber.Presets )
+
   },
   // override for Gibber.Audio method
   defineUgenProperty : function(key, initValue, obj) {

@@ -13,8 +13,6 @@ var Gibber = {
   started:false,
   
   export: function( target ) {
-    Gibber.Audio.export( target )
-    
     target.future = Gibber.Utilities.future
     target.solo = Gibber.Utilities.solo    
     
@@ -25,6 +23,8 @@ var Gibber = {
     target.Rndf = Gibber.Utilities.Rndf     
     target.rndi = Gibber.Utilities.rndi
     target.rndf = Gibber.Utilities.rndf 
+    
+    Gibber.Audio.export( target )
   },
   
   init: function( _options ) {                        
@@ -43,36 +43,25 @@ var Gibber = {
       
       if( typeof _options === 'object' ) $.extend( options, _options )
       
-      Gibber.Clock = Gibber.Audio.Clock
-            
-      Gibber.Theory = Gibber.Audio.Theory
-      Gibber.Theory.scale = Gibber.scale = Gibber.Theory.Scale( 'c4','Minor' )
-
       Gibber.Audio.init() 
       
-      //Gibber.Audio.export( Gibber )
-      
       if( options.globalize ) {
-        options.target.Master = Audio.Master
-      }
-
-      $.extend( Gibber.Binops, Gibber.Audio.Binops )
-    
-      if( options.globalize ) {
-        Gibber.export( options.target )
-        Gibber.Audio._export( Gibber )  
-        Gibber.Audio._export( options.target )
+        options.target.Master = Gibber.Audio.Master    
+        Gibber.export( options.target )        
+      }else{
+        Gibber.Utilities.rndi = Gibber.Audio.Core.rndi
+        Gibber.Utilities.rndf = Gibber.Audio.Core.rndf
+        Gibber.Utilities.Rndi = Gibber.Audio.Core.Rndi
+        Gibber.Utilities.Rndf = Gibber.Audio.Core.Rndf
+        
+        $.extend( Gibber, Gibber.Audio )
       }
       
-      options.target.$ = $ // geez louise
+      options.target.$ = $ // TODO: geez louise
             
       Gibber.Utilities.init()
       
-      Gibber.Clock = Gibber.Audio.Clock
-      Gibber.isInstrument = true// window.isInstrument // TODO: better way to do this without global?
-      $.extend( Gibber.Presets, Gibber.Audio.Synths.Presets )
-      $.extend( Gibber.Presets, Gibber.Audio.Percussion.Presets )
-      $.extend( Gibber.Presets, Gibber.Audio.FX.Presets )
+      Gibber.isInstrument = true
   },
   interfaceIsReady : function() {
     if( !Gibber.started ) {

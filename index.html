@@ -20,6 +20,10 @@ b.fx.add( Reverb() )
 
 c = Mono('easyfx')
   .note.seq( Rndi(0,12), [1/4,1/8,1/2,1,2].rnd( 1/8,4 ) )
+
+d = Synth('rhodes')
+  .fx.add( Delay() )
+  .chord.seq( Rndi(0,7,3), 2 )
 </script>
 
 </html>
