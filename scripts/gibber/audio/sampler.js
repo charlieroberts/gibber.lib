@@ -46,7 +46,7 @@
         name = 'Sampler'
          
       oscillator.type = 'Gen'
-      $.extend( true, oscillator, Gibber.ugen )
+      $.extend( true, oscillator, Gibber.Audio.ugenTemplate )
       
       oscillator.fx.ugen = oscillator
       

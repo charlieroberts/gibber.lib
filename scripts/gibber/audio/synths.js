@@ -120,7 +120,7 @@
         obj = new Gibberish[ type ]({ maxVoices: mv, useADSR:adsr, requireReleaseTrigger:requireReleaseTrigger, scale:scale }).connect( Gibber.Master )
         obj.type = 'Gen'
         
-        $.extend( true, obj, Gibber.ugen )
+        $.extend( true, obj, Gibber.Audio.ugenTemplate )
         
         obj.fx.ugen = obj
         

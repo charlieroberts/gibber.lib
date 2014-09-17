@@ -5,6 +5,387 @@ if(this.phase-=this.nextTime,Array.isArray(this.durations)){var s="function"==ty
 },{}],2:[function(_dereq_,module,exports){
 (function(){function t(t,e){return t=r[t],e=r[e],t.distance>e.distance?e.distance+12-t.distance:e.distance-t.distance}function e(t,e,i){for(;i>0;i--)t+=e;return t}function i(t,e){if("string"!=typeof t)return null;this.name=t,this.duration=e||4,this.accidental={value:0,sign:""};var i=t.match(/^([abcdefgh])(x|#|bb|b?)(-?\d*)/i);if(i&&t===i[0]&&0!==i[3].length)this.name=i[1].toLowerCase(),this.octave=parseFloat(i[3]),0!==i[2].length&&(this.accidental.sign=i[2].toLowerCase(),this.accidental.value=y[i[2]]);else{t=t.replace(/\u2032/g,"'").replace(/\u0375/g,",");var n=t.match(/^(,*)([abcdefgh])(x|#|bb|b?)([,\']*)$/i);if(!n||5!==n.length||t!==n[0])throw Error("Invalid note format");if(""===n[1]&&""===n[4])this.octave=n[2]===n[2].toLowerCase()?3:2;else if(""!==n[1]&&""===n[4]){if(n[2]===n[2].toLowerCase())throw Error("Invalid note format. Format must respect the Helmholtz notation.");this.octave=2-n[1].length}else{if(""!==n[1]||""===n[4])throw Error("Invalid note format");if(n[4].match(/^'+$/)){if(n[2]===n[2].toUpperCase())throw Error("Invalid note format. Format must respect the Helmholtz notation");this.octave=3+n[4].length}else{if(!n[4].match(/^,+$/))throw Error("Invalid characters after note name.");if(n[2]===n[2].toLowerCase())throw Error("Invalid note format. Format must respect the Helmholtz notation");this.octave=2-n[4].length}}this.name=n[2].toLowerCase(),0!==n[3].length&&(this.accidental.sign=n[3].toLowerCase(),this.accidental.value=y[n[3]])}}function n(t,e){if(!(t instanceof i))return null;e=e||"",this.name=t.name.toUpperCase()+t.accidental.sign+e,this.root=t,this.notes=[t],this.quality="major",this.type="major";var n,r,o,s,h,m=[],u=!1,c="quality",d=!1,p=!1,v=null;for(s=0,h=e.length;h>s;s++){for(n=e[s];" "===n||"("===n||")"===n;)n=e[++s];if(!n)break;if(r=n.charCodeAt(0),o=h>=s+3?e.substr(s,3):"","quality"===c)"M"===n||("maj"===o||916===r?(this.type="major",m.push("M7"),u=!0,(e[s+3]&&"7"===e[s+3]||916===r&&"7"===e[s+1])&&s++):"m"===n||"-"===n||"min"===o?this.quality=this.type="minor":111===r||176===r||"dim"===o?(this.quality="minor",this.type="diminished"):"+"===n||"aug"===o?(this.quality="major",this.type="augmented"):216===r||248===r?(this.quality="minor",this.type="diminished",m.push("m7"),u=!0):"sus"===o?(this.quality="sus",this.type=e[s+3]&&"2"===e[s+3]?"sus2":"sus4"):"5"===n?(this.quality="power",this.type="power"):s-=1),o in l&&(s+=2),c="";else if("#"===n)d=!0;else if("b"===n)p=!0;else if("5"===n)d?(v="A5","major"===this.quality&&(this.type="augmented")):p&&(v="d5","minor"===this.quality&&(this.type="diminished")),p=d=!1;else if("6"===n)m.push("M6"),p=d=!1;else if("7"===n)"diminished"===this.type?m.push("d7"):m.push("m7"),u=!0,p=d=!1;else if("9"===n)u||m.push("m7"),p?m.push("m9"):d?m.push("A9"):m.push("M9"),p=d=!1;else{if("1"!==n)throw Error("Unexpected character: '"+n+"' in chord name");n=e[++s],"1"===n?p?m.push("d11"):d?m.push("A11"):m.push("P11"):"3"===n&&(p?m.push("m13"):d?m.push("A13"):m.push("M13")),p=d=!1}}for(var y=0,g=f[this.type].length;g>y;y++)"5"===f[this.type][y][1]&&v?this.notes.push(a.interval(this.root,v)):this.notes.push(a.interval(this.root,f[this.type][y]));for(y=0,g=m.length;g>y;y++)this.notes.push(a.interval(this.root,m[y]))}var a={},r={c:{name:"c",distance:0,index:0},d:{name:"d",distance:2,index:1},e:{name:"e",distance:4,index:2},f:{name:"f",distance:5,index:3},g:{name:"g",distance:7,index:4},a:{name:"a",distance:9,index:5},b:{name:"b",distance:11,index:6},h:{name:"h",distance:11,index:6}},o=["c","d","e","f","g","a","b"],s={.25:"longa",.5:"breve",1:"whole",2:"half",4:"quarter",8:"eighth",16:"sixteenth",32:"thirty-second",64:"sixty-fourth",128:"hundred-twenty-eighth"},h=[{name:"unison",quality:"perfect",size:0},{name:"second",quality:"minor",size:1},{name:"third",quality:"minor",size:3},{name:"fourth",quality:"perfect",size:5},{name:"fifth",quality:"perfect",size:7},{name:"sixth",quality:"minor",size:8},{name:"seventh",quality:"minor",size:10},{name:"octave",quality:"perfect",size:12},{name:"ninth",quality:"minor",size:13},{name:"tenth",quality:"minor",size:15},{name:"eleventh",quality:"perfect",size:17},{name:"twelfth",quality:"perfect",size:19},{name:"thirteenth",quality:"minor",size:20},{name:"fourteenth",quality:"minor",size:22},{name:"fifteenth",quality:"perfect",size:24}],m={unison:0,second:1,third:2,fourth:3,fifth:4,sixth:5,seventh:6,octave:7,ninth:8,tenth:9,eleventh:10,twelfth:11,thirteenth:12,fourteenth:13,fifteenth:14},l={P:"perfect",M:"major",m:"minor",A:"augmented",d:"diminished",perf:"perfect",maj:"major",min:"minor",aug:"augmented",dim:"diminished"},u={perfect:"P",major:"M",minor:"m",augmented:"A",diminished:"d"},c={P:"P",M:"m",m:"M",A:"d",d:"A"},d={perfect:["diminished","perfect","augmented"],minor:["diminished","minor","major","augmented"]},f={major:["M3","P5"],minor:["m3","P5"],augmented:["M3","A5"],diminished:["m3","d5"],sus2:["M2","P5"],sus4:["P4","P5"],power:["P5"]},p={major:"M",minor:"m",augmented:"aug",diminished:"dim",power:"5"},v={"-2":"bb","-1":"b",0:"",1:"#",2:"x"},y={bb:-2,b:-1,"#":1,x:2};i.prototype={key:function(t){return t?7*(this.octave-1)+3+Math.ceil(r[this.name].distance/2):12*(this.octave-1)+4+r[this.name].distance+this.accidental.value},fq:function(t){return t=t||440,t*Math.pow(2,(this.key()-49)/12)},scale:function(t,e){return a.scale.list(this,t,e)},interval:function(t,e){return a.interval(this,t,e)},chord:function(t){return t=t||"major",t in p&&(t=p[t]),new n(this,t)},helmholtz:function(){var t,i=3>this.octave?this.name.toUpperCase():this.name.toLowerCase();return 2>=this.octave?(t=e("",",",2-this.octave),t+i+this.accidental.sign):(t=e("","'",this.octave-3),i+this.accidental.sign+t)},scientific:function(){return this.name.toUpperCase()+this.accidental.sign+("number"==typeof this.octave?this.octave:"")},enharmonics:function(){var t=[],e=this.key(),i=this.interval("m2","up"),n=this.interval("m2","down"),a=i.key()-i.accidental.value,r=n.key()-n.accidental.value,o=e-a;return 3>o&&o>-3&&(i.accidental={value:o,sign:v[o]},t.push(i)),o=e-r,3>o&&o>-3&&(n.accidental={value:o,sign:v[o]},t.push(n)),t},valueName:function(){return s[this.duration]},toString:function(t){return t="boolean"==typeof t?t:"number"==typeof this.octave?!1:!0,this.name.toLowerCase()+this.accidental.sign+(t?"":this.octave)}},n.prototype.dominant=function(t){return t=t||"",new n(this.root.interval("P5"),t)},n.prototype.subdominant=function(t){return t=t||"",new n(this.root.interval("P4"),t)},n.prototype.parallel=function(t){if(t=t||"","triad"!==this.chordType()||"diminished"===this.quality||"augmented"===this.quality)throw Error("Only major/minor triads have parallel chords");return"major"===this.quality?new n(this.root.interval("m3","down"),"m"):new n(this.root.interval("m3","up"))},n.prototype.chordType=function(){var t,e,i;if(2===this.notes.length)return"dyad";if(3===this.notes.length){e={unison:!1,third:!1,fifth:!1};for(var n=0,r=this.notes.length;r>n;n++)t=this.root.interval(this.notes[n]),i=h[parseFloat(a.interval.invert(t.simple)[1])-1],t.name in e?e[t.name]=!0:i.name in e&&(e[i.name]=!0);return e.unison&&e.third&&e.fifth?"triad":"trichord"}if(4===this.notes.length){e={unison:!1,third:!1,fifth:!1,seventh:!1};for(var n=0,r=this.notes.length;r>n;n++)t=this.root.interval(this.notes[n]),i=h[parseFloat(a.interval.invert(t.simple)[1])-1],t.name in e?e[t.name]=!0:i.name in e&&(e[i.name]=!0);if(e.unison&&e.third&&e.fifth&&e.seventh)return"tetrad"}return"unknown"},n.prototype.toString=function(){return this.name},a.note=function(t,e){return new i(t,e)},a.note.fromKey=function(t){var e=440*Math.pow(2,(t-49)/12);return a.frequency.note(e).note},a.chord=function(t){var e;if(e=t.match(/^([abcdefgh])(x|#|bb|b?)/i),e&&e[0])return new n(new i(e[0].toLowerCase()),t.substr(e[0].length));throw Error("Invalid Chord. Couldn't find note name")},a.frequency={note:function(t,e){e=e||440;var n,a,s,h,m,l,u;return n=Math.round(49+12*((Math.log(t)-Math.log(e))/Math.log(2))),u=e*Math.pow(2,(n-49)/12),l=1200*(Math.log(t/u)/Math.log(2)),a=Math.floor((n-4)/12),s=n-12*a-4,h=r[o[Math.round(s/2)]],m=h.name,s>h.distance?m+="#":h.distance>s&&(m+="b"),{note:new i(m+(a+1)),cents:l}}},a.interval=function(t,e,n){if("string"==typeof e){"down"===n&&(e=a.interval.invert(e));var r=l[e[0]],o=parseFloat(e.substr(1));if(!r||isNaN(o)||1>o)throw Error("Invalid string-interval format");return a.interval.from(t,{quality:r,interval:h[o-1].name},n)}if(e instanceof i&&t instanceof i)return a.interval.between(t,e);throw Error("Invalid parameters")},a.interval.from=function(e,n,a){n.direction=a||n.direction||"up";var s,l,u,c,f,p;if(f=m[n.interval],p=h[f],f>7&&(f-=7),f=r[e.name].index+f,f>o.length-1&&(f-=o.length),s=o[f],-1===d[p.quality].indexOf(n.quality)||-1===d[p.quality].indexOf(p.quality))throw Error("Invalid interval quality");return l=d[p.quality].indexOf(n.quality)-d[p.quality].indexOf(p.quality),u=p.size+l-t(e.name,s),e.octave&&(c=Math.floor((e.key()-e.accidental.value+t(e.name,s)-4)/12)+1+Math.floor(m[n.interval]/7)),u+=e.accidental.value,u>=11&&(u-=12),u>-3&&3>u&&(s+=v[u]),"down"===a&&c--,new i(s+(c||""))},a.interval.between=function(t,e){var i,n,a,o,s,m,l=t.key(),c=e.key();if(i=c-l,i>24||-25>i)throw Error("Too big interval. Highest interval is a augmented fifteenth (25 semitones)");return 0>i&&(o=t,t=e,e=o),a=r[e.name].index-r[t.name].index+7*(e.octave-t.octave),n=h[a],m=d[n.quality][Math.abs(i)-n.size+1],s=u[m]+(""+Number(a+1)),{name:n.name,quality:m,direction:i>0?"up":"down",simple:s}},a.interval.invert=function(t){if(2!==t.length&&3!==t.length)return!1;var e=c[t[0]],i=2===t.length?parseFloat(t[1]):parseFloat(t.substr(1));return i>8&&(i-=7),8!==i&&1!==i&&(i=9-i),e+(""+i)},a.scale={list:function(t,e,n){var r,o,s=[],h=[];if(!(t instanceof i))return!1;if("string"==typeof e&&(e=a.scale.scales[e],!e))return!1;for(s.push(t),n&&h.push(t.name+(t.accidental.sign||"")),r=0,o=e.length;o>r;r++)s.push(a.interval(t,e[r])),n&&h.push(s[r+1].name+(s[r+1].accidental.sign||""));return n?h:s},scales:{major:["M2","M3","P4","P5","M6","M7"],ionian:["M2","M3","P4","P5","M6","M7"],dorian:["M2","m3","P4","P5","M6","m7"],phrygian:["m2","m3","P4","P5","m6","m7"],lydian:["M2","M3","A4","P5","M6","M7"],mixolydian:["M2","M3","P4","P5","M6","m7"],minor:["M2","m3","P4","P5","m6","m7"],aeolian:["M2","m3","P4","P5","m6","m7"],locrian:["m2","m3","P4","d5","m6","m7"],majorpentatonic:["M2","M3","P5","M6"],minorpentatonic:["m3","P4","P5","m7"],chromatic:["m2","M2","m3","M3","P4","A4","P5","m6","M6","m7","M7"],harmonicchromatic:["m2","M2","m3","M3","P4","A4","P5","m6","M6","m7","M7"]}},module.exports=a})();
 },{}],3:[function(_dereq_,module,exports){
+module.exports = function( Gibber ) {
+  
+"use strict"
+var times = [],
+    $ = _dereq_( './dollar' ),
+    Gibberish = _dereq_( 'gibberish-dsp' ),
+    Audio
+
+Audio = {
+  // can't name export as Gibberish has the same name
+  _export: function( target ) {
+    console.log("AUDIO EXPORT" )
+    $.extend( target, Audio.Busses )       
+    $.extend( target, Audio.Oscillators )
+    $.extend( target, Audio.Synths )
+    $.extend( target, Audio.Percussion )
+    $.extend( target, Audio.Envelopes )
+    $.extend( target, Audio.FX )
+    $.extend( target, Audio.Seqs )    
+    $.extend( target, Audio.Samplers )
+    $.extend( target, Audio.PostProcessing )
+    
+    console.log("THEORY", Audio.Theory )
+    target.Theory = Audio.Theory
+    // $.extend( target, Audio.Theory )
+    $.extend( target, Audio.Analysis ) 
+    
+    // target.future = Gibber.Utilities.future
+    // target.solo = Gibber.Utilities.solo    
+    
+		target.Clock = Audio.Clock
+    target.Seq = Audio.Seq
+    target.Arp = Audio.Arp // move Arp to sequencers?
+    target.ScaleSeq = Audio.ScaleSeq
+
+    target.Rndi = Audio.Rndi
+    target.Rndf = Audio.Rndf     
+    target.rndi = Audio.rndi
+    target.rndf = Audio.rndf
+
+		target.module = Gibber.import
+    Audio.Time.export( target )
+    target.sec = target.seconds
+    Audio.Binops.export( target )    
+  },
+  init: function() {
+    // post-processing depends on having context instantiated
+    var __onstart = null
+    if( Audio.onstart ) __onstart = Audio.onstart
+    
+    if( !Audio.context ) { Audio.context = { sampleRate:44100 } }
+    
+    Audio.onstart = function() {
+      console.log( -4 )
+      Audio.Clock.start( true )
+              
+      if( __onstart !== null ) { __onstart() }
+    }
+    
+    Audio.Core._init()
+    
+    Audio.Master = Audio.Busses.Bus().connect( Audio.Core.out )
+
+    Audio.Master.type = 'Bus'
+    Audio.Master.name = 'Master'
+
+    $.extend( true, Audio.Master, Audio.ugenTemplate ) 
+    Audio.Master.fx.ugen = Audio.Master
+    
+    Audio.ugenTemplate.connect = 
+      Audio._oscillator.connect =
+      Audio._synth.connect =
+      Audio._effect.connect =
+      Audio._bus.connect =
+      Audio.connect;
+      
+    Audio.defineUgenProperty = Audio.defineUgenProperty    
+  },
+  // override for Gibber.Audio method
+  defineUgenProperty : function(key, initValue, obj) {
+    var isTimeProp = Audio.Clock.timeProperties.indexOf( key ) > -1,
+        prop = obj.properties[ key ] = {
+          value:  isTimeProp ? Audio.Clock.time( initValue ) : initValue,
+          binops: [],
+          parent : obj,
+          name : key,
+        },
+        mappingName = key.charAt(0).toUpperCase() + key.slice(1);
+    
+    Object.defineProperty(obj, key, {
+      configurable: true,
+      get: function() { return prop.value },
+      set: function(val) { 
+        if( obj[ mappingName ] && obj[ mappingName ].mapping ) {
+          if( obj[ mappingName ].mapping.remove )
+            obj[ mappingName ].mapping.remove( true ) // pass true to avoid setting property inside of remove method
+        }
+
+        prop.value = isTimeProp ? Audio.Clock.time( val ) : val
+        
+        Audio.dirty( obj )
+      },
+    });
+
+    obj[key] = prop.value
+  },
+  
+  // override for Gibber.Audio method
+  polyInit : function(ugen) {
+    ugen.mod = ugen.polyMod;
+    ugen.removeMod = ugen.removePolyMod;
+    
+    for( var key in ugen.polyProperties ) {
+      (function( _key ) {
+        var value = ugen.polyProperties[ _key ],
+            isTimeProp = Audio.Clock.timeProperties.indexOf( _key ) > -1
+
+        Object.defineProperty(ugen, _key, {
+          get : function() { return value; },
+          set : function( val ) { 
+            for( var i = 0; i < ugen.children.length; i++ ) {
+              ugen.children[ i ][ _key ] = isTimeProp ? Audio.Clock.time( val ) : val;
+            }
+          },
+        });
+        
+      })( key );
+    }
+  },
+  // override for Gibber.Audio method to use master bus
+  connect : function( bus, position ) {
+    if( typeof bus === 'undefined' ) bus = Audio.Master
+    
+    if( this.destinations.indexOf( bus ) === -1 ){
+      bus.addConnection( this, 1, position )
+      if( position !== 0 ) {
+        this.destinations.push( bus )
+      }
+    }
+    
+    return this
+  },
+  ugenTemplate: {
+    sequencers : [],
+    mappings: [],
+    fx: $.extend( [], {
+      add: function() {
+        var end = this.length === 0 ? this.ugen : this[ this.length - 1 ]
+        
+        end.disconnect()
+        
+        for( var i = 0; i < arguments.length; i++ ) {
+          var fx = arguments[ i ]
+          fx.input = end
+          
+          end = fx
+          
+          this.push( fx )
+        }
+        
+        if( this.ugen !== Audio.Master ) {
+          end.connect()
+        }else{
+          end.connect( Audio.out )
+        }
+                
+        return this.ugen
+      },
+      
+      remove: function() {
+        if( arguments.length > 0 ) {
+          for( var i = 0; i < arguments.length; i++ ) {
+            var arg = arguments[ i ];
+						
+						if( typeof arg === 'string' ) { // if identified using the fx name
+							for( var j = 0; j < this.length; j++ ) {
+								if( this[ j ].name === arg ) {
+									this.remove( j )
+								}
+							}
+							continue;
+						}
+						
+            if( typeof arg === 'number' ) { // if identified via position in fx chain
+							var ugenToRemove = this[ arg ]
+							ugenToRemove.disconnect()
+              this.splice( arg, 1 )
+							
+              if( typeof this[ arg ] !== 'undefined') {
+								
+								// reset input for current position in chain
+								var newConnectionNumber = arg - 1
+								if( newConnectionNumber !== -1 ) {
+									this[ arg ].input = this[ newConnectionNumber ]
+								}else{
+									this[ arg ].input = this.ugen
+								}
+								
+								// reset input for next position in chain, or connect to Master bus
+                if( typeof this[ arg + 1 ] !== 'undefined' ) { // if there is another fx ahead in chain...
+                  this[ arg + 1 ].input = arg === 0 ? this.ugen : this[ arg ]
+                }else{
+                  if( this.ugen !== Audio.Master ) {
+                    this.ugen.connect( Audio.Master )
+                  }else{
+                    this.ugen.connect( Audio.out )
+                  }
+                }
+              }else{
+                if( this.length > 0 ) { // if there is an fx behind in chain
+                  this[ arg - 1 ].connect( Audio.Master )
+                }else{
+                  if( this.ugen !== Audio.Master ) {
+                    this.ugen.connect( Audio.Master ) // no more fx
+                  }else{
+                    this.ugen.connect( Audio.out )
+                  }
+                }
+              }
+            }
+          }
+        }else{ // remove all fx
+          if( this.length > 0) {
+            this[ this.length - 1 ].disconnect()
+            if( this.ugen !== Audio.Master ) {
+              this.ugen.connect( Audio.Master )
+            }else{
+              this.ugen.connect( Audio.Audio.out )
+            }
+            this.ugen.codegen()
+            this.length = 0
+          }else{
+            console.log( this.ugen.name + ' does not have any fx to remove. ')
+          }
+        }
+      },
+    }),
+      
+    replaceWith: function( replacement ) {
+      for( var i = 0; i < this.destinations.length; i++ ) {
+        replacement.connect( this.destinations[i] )
+      }
+      
+      for( var i = 0; i < this.sequencers.length; i++ ) {
+        this.sequencers[ i ].target = replacement
+        replacement.sequencers.push( this.sequencers[i] )
+      }
+      
+      for( var i = 0; i < this.mappingObjects.length; i++ ) {
+        var mapping = this.mappingObjects[ i ]
+
+        if( mapping.targets.length > 0 ) {
+          for( var j = 0; j < mapping.targets.length; j++ ) {
+            var _mapping = mapping.targets[ j ]
+            
+            if( replacement.mappingProperties[ mapping.name ] ) {
+              _mapping[ 0 ].mapping.replace( replacement, mapping.name, mapping.Name )
+            }else{ // replacement object does not have property that was assigned to mapping
+              _mapping[ 0 ].mapping.remove()
+            }
+          }
+        }
+      }
+  
+      this.kill()
+    },
+
+    kill: function() { 
+      var end = this.fx.length !== 0 ? this.fx[ this.fx.length - 1 ] : this
+      if( this.seq.isRunning ) this.seq.disconnect()
+      end.disconnect()
+      
+      for( var i = 0; i < this.fx.length; i++ ) {
+        var fx = this.fx[ i ]
+        if( fx.seq.isRunning ) fx.seq.disconnect()
+      }
+      
+      this.disconnect()
+      
+      for( var i = 0; i < this.mappings.length; i++ ) {
+        this.mappings[ i ].remove() 
+      }
+      
+      if( this.clearMarks ) // check required for modulators
+        this.clearMarks()
+      
+      console.log( this.name + " has been terminated.")
+    },
+
+    play: function( notes, durations, repeat ) {
+      if( this.note ) {
+        this.note.seq( notes, durations )
+      }else if( this.frequency ) {
+        this.frequency.seq( notes, durations )
+      }
+      
+      return this
+    },
+
+    // stop : function() {
+    //   if( this.seq ) this.seq.stop()
+    // },
+    // start : function() {
+    //   if( this.seq ) this.seq.start()
+    // },
+    
+    fadeIn : function( _time, endLevel ) {
+      if( isNaN( endLevel ) ) {
+        endLevel = 1
+      }
+
+      var time = Audio.Clock.time( _time ),
+          decay = new Audio.Core.ExponentialDecay({ decayCoefficient:.05, length:time }),
+          //ramp = Mul( Sub(1,decay), endLevel )
+          line = new Audio.Core.Line( 0, endLevel, time )
+          
+      this.amp = line
+      
+      future( function() { this.amp = endLevel }.bind( this ), time)
+      
+      return this
+    },
+    
+    fadeOut : function( _time ) {
+      var time = Audio.Clock.time( _time ),
+          decay = new Audio.Core.ExponentialDecay({ decayCoefficient:.00005, length:time }),
+          //ramp = Mul( decay, this.amp() )
+          line = new Audio.Core.Line( this.amp(), 0, Audio.Clock.time( time ) )
+          
+      this.amp = line
+      
+      future( function() { this.amp = 0 }.bind( this ), time )
+      
+      return this
+    },
+    
+    stop: function() {
+      Audio.analysisUgens.length = 0
+      Audio.sequencers.length = 0
+    
+      for( var i = 0; i < Audio.Master.inputs.length; i++ ) {
+        Audio.Master.inputs[ i ].value.disconnect()
+      }
+    
+      Audio.Master.inputs.length = 0
+    
+      Audio.Clock.reset()
+    
+      Audio.Master.fx.remove()
+    
+      Audio.Master.amp = 1
+    
+      console.log( 'Audio stopped.')
+    }
+  }
+}
+
+Audio.Core = _dereq_( 'gibberish-dsp' )
+Audio.Core._init = Audio.Core.init.bind( Audio.Core )
+delete Audio.Core.init
+
+$.extend( Audio, Audio.Core )
+
+Audio.Clock =          _dereq_( './clock' )( Gibber )
+Audio.Seqs =           _dereq_( './seq')( Gibber )
+Audio.Theory =         _dereq_( './audio/theory' )( Gibber )
+Audio.FX =             _dereq_( './audio/fx' )( Gibber )
+Audio.Oscillators =    _dereq_( './audio/oscillators' )( Gibber )
+Audio.Synths =         _dereq_( './audio/synths' )( Gibber )
+Audio.Busses =         _dereq_( './audio/bus' )( Gibber )
+Audio.Analysis =       _dereq_( './audio/analysis' )( Gibber )
+Audio.Envelopes =      _dereq_( './audio/envelopes' )( Gibber )
+Audio.Percussion =     _dereq_( './audio/drums' )( Gibber )
+Audio.Input =          _dereq_( './audio/audio_input' )( Gibber )
+Audio.Samplers =       _dereq_( './audio/sampler' )( Gibber )
+Audio.PostProcessing = _dereq_( './audio/postprocessing' )( Gibber )
+Audio.Arp =            _dereq_( './audio/arp' )( Gibber )
+
+return Audio
+}
+},{"./audio/analysis":4,"./audio/arp":5,"./audio/audio_input":6,"./audio/bus":7,"./audio/drums":8,"./audio/envelopes":9,"./audio/fx":10,"./audio/oscillators":11,"./audio/postprocessing":12,"./audio/sampler":13,"./audio/synths":14,"./audio/theory":15,"./clock":16,"./dollar":17,"./seq":20,"gibberish-dsp":1}],4:[function(_dereq_,module,exports){
 !function() {
   "use strict"
   
@@ -82,7 +463,7 @@ if(this.phase-=this.nextTime,Array.isArray(this.durations)){var s="function"==ty
   module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Analysis }
   
 }()
-},{"../dollar":16,"../mappings":18,"gibberish-dsp":1}],4:[function(_dereq_,module,exports){
+},{"../dollar":17,"../mappings":19,"gibberish-dsp":1}],5:[function(_dereq_,module,exports){
 /**#Arp - Sequencer
 The Arpeggiator takes a chord and plays the individual notes comprising it in succession, with different possible patterns.
 It is basically an extended [Seq](javascript:Gibber.Environment.displayDocs('Seq'\)) object. The available patterns are:  
@@ -243,7 +624,7 @@ Arp = function(notation, beats, pattern, mult, scale) {
 module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Arp }
 
 }()
-},{"../../external/teoria.min":2,"../dollar":16,"../seq":19}],5:[function(_dereq_,module,exports){
+},{"../../external/teoria.min":2,"../dollar":17,"../seq":20}],6:[function(_dereq_,module,exports){
 !function() { 
   "use strict"
   
@@ -276,7 +657,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
         args = Array.prototype.slice.call( arguments, 0 )
        
     oscillator.type = 'Gen'
-    $.extend( true, oscillator, Gibber.ugen )
+    $.extend( true, oscillator, Gibber.Audio.ugenTemplate )
     
     oscillator.fx.ugen = oscillator
     
@@ -300,13 +681,13 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
   module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Input }
 
 }()
-},{"../mappings":18,"gibberish-dsp":1}],6:[function(_dereq_,module,exports){
+},{"../mappings":19,"gibberish-dsp":1}],7:[function(_dereq_,module,exports){
 !function() {
   "use strict"
   
   var $ = _dereq_( '../dollar' ),//require('zepto-browserify').Zepto,
       Gibberish = _dereq_( 'gibberish-dsp' ),
-      Gibber,
+      Gibber,// = require( '../gibber' ),
       curves = _dereq_('../mappings').outputCurves,
       LINEAR = curves.LINEAR,
       LOGARITHMIC = curves.LOGARITHMIC
@@ -362,7 +743,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
           set: function() {}
         })
       
-        $.extend( true, obj, Gibber.ugen )
+        $.extend( true, obj, Gibber.Audio.ugenTemplate )
         
         obj.fx.ugen = obj
         
@@ -402,7 +783,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
     
     obj.type = 'FX'
   
-    $.extend( true, obj, Gibber.ugen )
+    $.extend( true, obj, Gibber.Audio.ugenTemplate )
     
     obj.fx.ugen = obj
     
@@ -436,9 +817,8 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
   }
   
   module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Busses }
-  
 }()
-},{"../dollar":16,"../mappings":18,"gibberish-dsp":1}],7:[function(_dereq_,module,exports){
+},{"../dollar":17,"../mappings":19,"gibberish-dsp":1}],8:[function(_dereq_,module,exports){
 (function() {
   "use strict"
   
@@ -529,7 +909,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
       
         obj.type = 'Gen'
         
-        $.extend( true, obj, Gibber.ugen )
+        $.extend( true, obj, Gibber.Audio.ugenTemplate )
         
         obj.fx.ugen = obj
         
@@ -578,7 +958,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
     obj.type = 'Gen'
     obj.children = []
     
-    $.extend( true, obj, Gibber.ugen )
+    $.extend( true, obj, Gibber.Audio.ugenTemplate )
     
     obj.fx.ugen = obj
   
@@ -777,7 +1157,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
     obj.type = 'Gen'
     obj.children = []
     
-    $.extend( true, obj, Gibber.ugen )
+    $.extend( true, obj, Gibber.Audio.ugenTemplate )
     
     obj.fx.ugen = obj
   
@@ -794,9 +1174,9 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
   	}*/
 	  
     // connect in note method
-    obj.kick = Gibber.Percussion.Kick().disconnect()//new Gibberish.Kick()//.connect( obj )
-    obj.snare = Gibber.Percussion.Snare().disconnect()//new Gibberish.Snare()//.connect( obj )
-    obj.hat = Gibber.Percussion.Hat().disconnect()//new Gibberish.Hat()//.connect( obj )
+    obj.kick = Gibber.Audio.Percussion.Kick().disconnect()//new Gibberish.Kick()//.connect( obj )
+    obj.snare = Gibber.Audio.Percussion.Snare().disconnect()//new Gibberish.Snare()//.connect( obj )
+    obj.hat = Gibber.Audio.Percussion.Hat().disconnect()//new Gibberish.Hat()//.connect( obj )
     
     obj.kick.connect( obj )
     obj.snare.connect( obj )
@@ -1041,7 +1421,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
   module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Percussion }
 })()
 
-},{"../clock":15,"../dollar":16,"../mappings":18,"gibberish-dsp":1}],8:[function(_dereq_,module,exports){
+},{"../clock":16,"../dollar":17,"../mappings":19,"gibberish-dsp":1}],9:[function(_dereq_,module,exports){
 !function() {
   "use strict"
   
@@ -1090,7 +1470,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
         //obj.type = 'Env'
         obj.name = name
       
-        $.extend( true, obj, Gibber.ugen )
+        $.extend( true, obj, Gibber.Audio.ugenTemplate )
         
         Gibber.createProxyProperties( obj, _mappingProperties[ name ] ) 
         
@@ -1106,7 +1486,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
 
 }()
 
-},{"../clock":15,"../dollar":16,"../mappings":18,"gibberish-dsp":1}],9:[function(_dereq_,module,exports){
+},{"../clock":16,"../dollar":17,"../mappings":19,"gibberish-dsp":1}],10:[function(_dereq_,module,exports){
 !function() {
   "use strict"
   
@@ -1341,7 +1721,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
         obj.type = 'FX'
         obj.name = name
       
-        $.extend( true, obj, Gibber.ugen )
+        $.extend( true, obj, Gibber.Audio.ugenTemplate )
         
         Gibber.createProxyProperties( obj, _mappingProperties[ name ] ) 
         
@@ -1445,7 +1825,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
 
 }()
 
-},{"../dollar":16,"../mappings":18,"gibberish-dsp":1}],10:[function(_dereq_,module,exports){
+},{"../dollar":17,"../mappings":19,"gibberish-dsp":1}],11:[function(_dereq_,module,exports){
 !function() {
   "use strict"
   
@@ -1512,7 +1892,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
             args = Array.prototype.slice.call( arguments, 0 )
            
         oscillator.type = 'Gen'
-        $.extend( true, oscillator, Gibber.ugen )
+        $.extend( true, oscillator, Gibber.Audio.ugenTemplate )
         
         oscillator.fx.ugen = oscillator
         
@@ -1564,7 +1944,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
     
     oscillator.type = 'Gen'
 
-    $.extend( true, oscillator, Gibber.ugen )
+    $.extend( true, oscillator, Gibber.Audio.ugenTemplate )
 
     oscillator.fx.ugen = oscillator
     
@@ -1654,7 +2034,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
     
     oscillator.type = 'Gen'
 
-    $.extend( true, oscillator, Gibber.ugen )
+    $.extend( true, oscillator, Gibber.Audio.ugenTemplate )
 
     oscillator.fx.ugen = oscillator
 
@@ -1704,7 +2084,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
   module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Oscillators }
 
 }()
-},{"../dollar":16,"../mappings":18,"gibberish-dsp":1}],11:[function(_dereq_,module,exports){
+},{"../dollar":17,"../mappings":19,"gibberish-dsp":1}],12:[function(_dereq_,module,exports){
 !function() {
   "use strict";
   
@@ -1855,7 +2235,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
   module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return PostProcessing }
   
 }()
-},{"gibberish-dsp":1}],12:[function(_dereq_,module,exports){
+},{"gibberish-dsp":1}],13:[function(_dereq_,module,exports){
 !function() { 
   "use strict"
   
@@ -1904,7 +2284,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
         name = 'Sampler'
          
       oscillator.type = 'Gen'
-      $.extend( true, oscillator, Gibber.ugen )
+      $.extend( true, oscillator, Gibber.Audio.ugenTemplate )
       
       oscillator.fx.ugen = oscillator
       
@@ -2090,7 +2470,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
   
   module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Samplers }  
 }()
-},{"../clock":15,"../dollar":16,"../mappings":18,"gibberish-dsp":1}],13:[function(_dereq_,module,exports){
+},{"../clock":16,"../dollar":17,"../mappings":19,"gibberish-dsp":1}],14:[function(_dereq_,module,exports){
 !function() {
   "use strict"
   
@@ -2213,7 +2593,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
         obj = new Gibberish[ type ]({ maxVoices: mv, useADSR:adsr, requireReleaseTrigger:requireReleaseTrigger, scale:scale }).connect( Gibber.Master )
         obj.type = 'Gen'
         
-        $.extend( true, obj, Gibber.ugen )
+        $.extend( true, obj, Gibber.Audio.ugenTemplate )
         
         obj.fx.ugen = obj
         
@@ -2499,7 +2879,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
 
 }()
 
-},{"../clock":15,"../dollar":16,"../mappings":18,"gibberish-dsp":1}],14:[function(_dereq_,module,exports){
+},{"../clock":16,"../dollar":17,"../mappings":19,"gibberish-dsp":1}],15:[function(_dereq_,module,exports){
 !function() {
   "use strict"
 
@@ -2802,7 +3182,7 @@ module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gi
 //window.Scale = Gibber.Theory.Scale
 
 }()
-},{"../../external/teoria.min":2,"../dollar":16}],15:[function(_dereq_,module,exports){
+},{"../../external/teoria.min":2,"../dollar":17}],16:[function(_dereq_,module,exports){
 (function() {
   
 "use strict"
@@ -2982,7 +3362,7 @@ var Clock = {
 module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Clock; }
 
 })()
-},{"./dollar":16,"./mappings":18,"gibberish-dsp":1}],16:[function(_dereq_,module,exports){
+},{"./dollar":17,"./mappings":19,"gibberish-dsp":1}],17:[function(_dereq_,module,exports){
 (function (global){
 !function() {
 
@@ -3075,12 +3455,11 @@ module.exports = $
 
 }()
 }).call(this,typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],17:[function(_dereq_,module,exports){
+},{}],18:[function(_dereq_,module,exports){
 (function() {
 //"use strict" 
 // can't use strict because eval is used to evaluate user code in the run method
 // I should wrap this in a Function call instead...
-
 var $ = _dereq_( './dollar' )
 
 var Gibber = {
@@ -3092,35 +3471,15 @@ var Gibber = {
   started:false,
   
   export: function( target ) {
-    $.extend( target, Gibber.Busses )       
-    $.extend( target, Gibber.Oscillators )
-    $.extend( target, Gibber.Synths )
-    $.extend( target, Gibber.Percussion )
-    $.extend( target, Gibber.Envelopes )
-    $.extend( target, Gibber.FX )
-    $.extend( target, Gibber.Seqs )    
-    $.extend( target, Gibber.Samplers )
-    $.extend( target, Gibber.PostProcessing )      
-    $.extend( target, Gibber.Theory )
-    $.extend( target, Gibber.Analysis ) 
+    Gibber.Audio.export( target )
     
     target.future = Gibber.Utilities.future
     target.solo = Gibber.Utilities.solo    
-    
-		target.Clock = Gibber.Clock
-    target.Seq = Gibber.Seq
-    target.Arp = Gibber.Arp // move Arp to sequencers?
-    target.ScaleSeq = Gibber.ScaleSeq
 
     target.Rndi = Gibber.Utilities.Rndi
     target.Rndf = Gibber.Utilities.Rndf     
     target.rndi = Gibber.Utilities.rndi
-    target.rndf = Gibber.Utilities.rndf
-
-		target.module = Gibber.import
-    Gibber.Audio.Time.export( target )
-    target.sec = target.seconds
-    Gibber.Audio.Binops.export( target )    
+    target.rndf = Gibber.Utilities.rndf 
   },
   
   init: function( _options ) {                        
@@ -3137,75 +3496,47 @@ var Gibber = {
         target: window
       }
       
-      Gibber.Utilities.Rndi = Gibber.Audio.Rndi
-      Gibber.Utilities.Rndf = Gibber.Audio.Rndf
-      Gibber.Utilities.rndi = Gibber.Audio.rndi
-      Gibber.Utilities.rndf = Gibber.Audio.rndf
-      
       if( typeof _options === 'object' ) $.extend( options, _options )
+      
+      Gibber.Clock = Gibber.Audio.Clock
+            
+      Gibber.Theory = Gibber.Audio.Theory
+      Gibber.Theory.scale = Gibber.scale = Gibber.Theory.Scale( 'c4','Minor' )
 
-      $.extend( Gibber.Presets, Gibber.Synths.Presets )
-      $.extend( Gibber.Presets, Gibber.Percussion.Presets )
-      $.extend( Gibber.Presets, Gibber.FX.Presets )
-      $.extend( Gibber.Presets, Gibber.FX.Presets )
+      Gibber.Audio.init() 
+      
+      //Gibber.Audio.export( Gibber )
+      
+      if( options.globalize ) {
+        options.target.Master = Audio.Master
+      }
+
+      $.extend( Gibber.Presets, Gibber.Audio.Synths.Presets )
+      $.extend( Gibber.Presets, Gibber.Audio.Percussion.Presets )
+      $.extend( Gibber.Presets, Gibber.Audio.FX.Presets )
+      $.extend( Gibber.Presets, Gibber.Audio.FX.Presets )
       
       $.extend( Gibber.Binops, Gibber.Audio.Binops )
-      
-      if( options.globalize ) Gibber.export( options.target )
+            
+      if( options.globalize ) {
+        console.log("GLOBALIZE")
+        Gibber.export( options.target )
+        Gibber.Audio._export( Gibber )
+        Gibber.Audio._export( options.target )
+      }
       
       options.target.$ = $ // geez louise
             
       Gibber.Utilities.init()
       
-      // post-processing depends on having context instantiated
-      var __onstart = null
-      if( Gibber.Audio.onstart ) __onstart = Gibber.Audio.onstart
-      
-      if( !Gibber.Audio.context ) { Gibber.Audio.context = { sampleRate:44100 } }
-      
-      Gibber.Audio.onstart = function() {
-  			//Gibber.Esprima = window.esprima
-        //Gibber.AudioPostProcessing.init()
-        //Gibber.interfaceIsReady()
-        
-        Gibber.Clock.start( true )
-                
-        if( __onstart !== null ) { __onstart() }
-      }
-      
-      Gibber.Audio.init()
-      
-      Gibber.Master = Gibber.Busses.Bus().connect( Gibber.Audio.out )
-
-      if( options.globalize ) {
-        options.target.Master = Gibber.Master
-      }
-
-      Gibber.Master.type = 'Bus'
-      Gibber.Master.name = 'Master'
-
-      $.extend( true, Gibber.Master, Gibber.ugen ) 
-      Gibber.Master.fx.ugen = Gibber.Master
-      
       Gibber.isInstrument = true// window.isInstrument // TODO: better way to do this without global?
       //Gibber.createMappingAbstractions( Master, Gibber.Busses.mappingProperties )
       
       // override so that all ugens connect to Gibber's Master bus by default
-      Gibber.Audio.ugen.connect = 
-        Gibber.Audio._oscillator.connect =
-        Gibber.Audio._synth.connect =
-        Gibber.Audio._effect.connect =
-        Gibber.Audio._bus.connect =
-        Gibber.connect;
-        
-      Gibber.Audio.defineUgenProperty = Gibber.defineUgenProperty
-      
-      //$script.ready('environment', function() {
-        //if( !window.isInstrument ) {
-        //  Gibber.Clock.addMetronome( Gibber.Environment.Metronome )
-        //}
-      Gibber.scale = Gibber.Theory.Scale( 'c4','Minor' )
+
       //})
+      //Gibber.scale = Gibber.Audio.scale
+      //Gibber.Theory = Gibber.Audio.
   },
   interfaceIsReady : function() {
     if( !Gibber.started ) {
@@ -3255,72 +3586,7 @@ var Gibber = {
     }
     return { done: function( fcn ) { _done =  fcn } }
  	},  
-  // override for Gibber.Audio method
-  defineUgenProperty : function(key, initValue, obj) {
-    var isTimeProp = Gibber.Clock.timeProperties.indexOf(key) > -1,
-        prop = obj.properties[key] = {
-          value:  isTimeProp ? Gibber.Clock.time( initValue ) : initValue,
-          binops: [],
-          parent : obj,
-          name : key,
-        },
-        mappingName = key.charAt(0).toUpperCase() + key.slice(1);
-    
-    Object.defineProperty(obj, key, {
-      configurable: true,
-      get: function() { return prop.value },
-      set: function(val) { 
-        if( obj[ mappingName ] && obj[ mappingName ].mapping ) {
-          if( obj[ mappingName ].mapping.remove )
-            obj[ mappingName ].mapping.remove( true ) // pass true to avoid setting property inside of remove method
-        }
-
-        prop.value = isTimeProp ? Gibber.Clock.time( val ) : val
-        
-        Gibber.Audio.dirty(obj);
-      },
-    });
-
-    obj[key] = prop.value
-  },
   
-  // override for Gibber.Audio method
-  polyInit : function(ugen) {
-    ugen.mod = ugen.polyMod;
-    ugen.removeMod = ugen.removePolyMod;
-    
-    for( var key in ugen.polyProperties ) {
-      (function( _key ) {
-        var value = ugen.polyProperties[ _key ],
-            isTimeProp = Gibber.Clock.timeProperties.indexOf( _key ) > -1
-
-        Object.defineProperty(ugen, _key, {
-          get : function() { return value; },
-          set : function( val ) { 
-            for( var i = 0; i < ugen.children.length; i++ ) {
-              ugen.children[ i ][ _key ] = isTimeProp ? Gibber.Clock.time( val ) : val;
-            }
-          },
-        });
-        
-      })( key );
-    }
-  },
-  
-  // override for Gibber.Audio method to use master bus
-  connect : function( bus, position ) {
-    if( typeof bus === 'undefined' ) bus = Gibber.Master
-    
-    if( this.destinations.indexOf( bus ) === -1 ){
-      bus.addConnection( this, 1, position )
-      if( position !== 0 ) {
-        this.destinations.push( bus )
-      }
-    }
-    
-    return this
-  },
-
   log: function( msg ) { 
     //console.log( "LOG", typeof msg )
     if( typeof msg !== 'undefined' ) {
@@ -3434,25 +3700,6 @@ var Gibber = {
     }
     
     return obj
-  },
-  
-  stopAudio: function() {    
-    Gibber.Audio.analysisUgens.length = 0
-    Gibber.Audio.sequencers.length = 0
-    
-    for( var i = 0; i < Gibber.Master.inputs.length; i++ ) {
-      Gibber.Master.inputs[ i ].value.disconnect()
-    }
-    
-    Gibber.Master.inputs.length = 0
-    
-    Gibber.Clock.reset()
-    
-    Gibber.Master.fx.remove()
-    
-    Gibber.Master.amp = 1
-    
-    console.log( 'Audio stopped.')
   },
   
   clear : function() {
@@ -3607,7 +3854,7 @@ var Gibber = {
     // }
     
     if( !obj.seq ) {
-      obj.seq = Gibber.Seqs.Seq({ doNotStart:true, scale:obj.scale, priority:priority })
+      obj.seq = Gibber.Audio.Seqs.Seq({ doNotStart:true, scale:obj.scale, priority:priority })
     }
     
     fnc.seq = function( v,d ) {  
@@ -3824,7 +4071,7 @@ var Gibber = {
     obj.gibber = true // keyword identifying gibber object, needed for notation parser
     
     if( !obj.seq && shouldSeq ) {
-      obj.seq = Gibber.Seqs.Seq({ doNotStart:true, scale:obj.scale })      
+      obj.seq = Gibber.Audio.Seqs.Seq({ doNotStart:true, scale:obj.scale })      
     }
     
     obj.mappingProperties = mappingProperties
@@ -3836,233 +4083,15 @@ var Gibber = {
       }
     }
   },  
-  
-  object: {
-    class: null,
-    text : null,
-    init: function( classIdentifier ) {
-      this.class = classIdentifier
-      this.text = $( '.' + classIdentifier )
-    },
-  },
-  
-  ugen: {
-    sequencers : [],
-    mappings: [],
-    fx: $.extend( [], {
-      add: function() {
-        var end = this.length === 0 ? this.ugen : this[ this.length - 1 ]
-        
-        end.disconnect()
-        
-        for( var i = 0; i < arguments.length; i++ ) {
-          var fx = arguments[ i ]
-          fx.input = end
-          
-          end = fx
-          
-          this.push( fx )
-        }
-        
-        if( this.ugen !== Gibber.Master ) {
-          end.connect()
-        }else{
-          end.connect( Gibber.Audio.out )
-        }
-                
-        return this.ugen
-      },
-      
-      remove: function() {
-        if( arguments.length > 0 ) {
-          for( var i = 0; i < arguments.length; i++ ) {
-            var arg = arguments[ i ];
-						
-						if( typeof arg === 'string' ) { // if identified using the fx name
-							for( var j = 0; j < this.length; j++ ) {
-								if( this[ j ].name === arg ) {
-									this.remove( j )
-								}
-							}
-							continue;
-						}
-						
-            if( typeof arg === 'number' ) { // if identified via position in fx chain
-							var ugenToRemove = this[ arg ]
-							ugenToRemove.disconnect()
-              this.splice( arg, 1 )
-							
-              if( typeof this[ arg ] !== 'undefined') {
-								
-								// reset input for current position in chain
-								var newConnectionNumber = arg - 1
-								if( newConnectionNumber !== -1 ) {
-									this[ arg ].input = this[ newConnectionNumber ]
-								}else{
-									this[ arg ].input = this.ugen
-								}
-								
-								// reset input for next position in chain, or connect to Master bus
-                if( typeof this[ arg + 1 ] !== 'undefined' ) { // if there is another fx ahead in chain...
-                  this[ arg + 1 ].input = arg === 0 ? this.ugen : this[ arg ]
-                }else{
-                  if( this.ugen !== Gibber.Master ) {
-                    this.ugen.connect( Gibber.Master )
-                  }else{
-                    this.ugen.connect( Gibber.Audio.out )
-                  }
-                }
-              }else{
-                if( this.length > 0 ) { // if there is an fx behind in chain
-                  this[ arg - 1 ].connect( Gibber.Master )
-                }else{
-                  if( this.ugen !== Gibber.Master ) {
-                    this.ugen.connect( Gibber.Master ) // no more fx
-                  }else{
-                    this.ugen.connect( Gibber.Audio.out )
-                  }
-                }
-              }
-            }
-          }
-        }else{ // remove all fx
-          if( this.length > 0) {
-            this[ this.length - 1 ].disconnect()
-            if( this.ugen !== Gibber.Master ) {
-              this.ugen.connect( Gibber.Master )
-            }else{
-              this.ugen.connect( Gibber.Audio.out )
-            }
-            this.ugen.codegen()
-            this.length = 0
-          }else{
-            Gibber.log( this.ugen.name + ' does not have any fx to remove. ')
-          }
-        }
-      },
-    }),
-      
-    replaceWith: function( replacement ) {
-      for( var i = 0; i < this.destinations.length; i++ ) {
-        replacement.connect( this.destinations[i] )
-      }
-      
-      for( var i = 0; i < this.sequencers.length; i++ ) {
-        this.sequencers[ i ].target = replacement
-        replacement.sequencers.push( this.sequencers[i] )
-      }
-      
-      for( var i = 0; i < this.mappingObjects.length; i++ ) {
-        var mapping = this.mappingObjects[ i ]
-
-        if( mapping.targets.length > 0 ) {
-          for( var j = 0; j < mapping.targets.length; j++ ) {
-            var _mapping = mapping.targets[ j ]
-            
-            if( replacement.mappingProperties[ mapping.name ] ) {
-              _mapping[ 0 ].mapping.replace( replacement, mapping.name, mapping.Name )
-            }else{ // replacement object does not have property that was assigned to mapping
-              _mapping[ 0 ].mapping.remove()
-            }
-          }
-        }
-      }
-  
-      this.kill()
-    },
-
-    kill: function() { 
-      var end = this.fx.length !== 0 ? this.fx[ this.fx.length - 1 ] : this
-      if( this.seq.isRunning ) this.seq.disconnect()
-      end.disconnect()
-      
-      for( var i = 0; i < this.fx.length; i++ ) {
-        var fx = this.fx[ i ]
-        if( fx.seq.isRunning ) fx.seq.disconnect()
-      }
-      
-      this.disconnect()
-      
-      for( var i = 0; i < this.mappings.length; i++ ) {
-        this.mappings[ i ].remove() 
-      }
-      
-      if( this.clearMarks ) // check required for modulators
-        this.clearMarks()
-      
-      console.log( this.name + " has been terminated.")
-    },
-
-    play: function( notes, durations, repeat ) {
-      if( this.note ) {
-        this.note.seq( notes, durations )
-      }else if( this.frequency ) {
-        this.frequency.seq( notes, durations )
-      }
-      
-      return this
-    },
-
-    // stop : function() {
-    //   if( this.seq ) this.seq.stop()
-    // },
-    // start : function() {
-    //   if( this.seq ) this.seq.start()
-    // },
-    
-    fadeIn : function( _time, endLevel ) {
-      if( isNaN( endLevel ) ) {
-        endLevel = 1
-      }
-
-      var time = Gibber.Clock.time( _time ),
-          decay = new Gibber.Audio.ExponentialDecay({ decayCoefficient:.05, length:time }),
-          //ramp = Mul( Sub(1,decay), endLevel )
-          line = new Gibber.Audio.Line( 0, endLevel, time )
-          
-      this.amp = line
-      
-      future( function() { this.amp = endLevel }.bind( this ), time)
-      
-      return this
-    },
-    
-    fadeOut : function( _time ) {
-      var time = Gibber.Clock.time( _time ),
-          decay = new Gibber.Audio.ExponentialDecay({ decayCoefficient:.00005, length:time }),
-          //ramp = Mul( decay, this.amp() )
-          line = new Gibber.Audio.Line( this.amp(), 0, Gibber.Clock.time( time ) )
-          
-      this.amp = line
-      
-      future( function() { this.amp = 0 }.bind( this ), time )
-      
-      return this
-    },
-  }
 }
 
-Gibber.Audio =          _dereq_( 'gibberish-dsp' )
-Gibber.Clock =          _dereq_( './clock' )( Gibber )
-Gibber.Seqs =           _dereq_( './seq')( Gibber )
-Gibber.Theory =         _dereq_( './audio/theory' )( Gibber )
-Gibber.FX =             _dereq_( './audio/fx' )( Gibber )
-Gibber.Oscillators =    _dereq_( './audio/oscillators' )( Gibber )
-Gibber.Synths =         _dereq_( './audio/synths' )( Gibber )
-Gibber.Busses =         _dereq_( './audio/bus' )( Gibber )
-Gibber.Analysis =       _dereq_( './audio/analysis' )( Gibber )
-Gibber.Envelopes =      _dereq_( './audio/envelopes' )( Gibber )
-Gibber.Percussion =     _dereq_( './audio/drums' )( Gibber )
-Gibber.Input =          _dereq_( './audio/audio_input' )( Gibber )
-Gibber.Samplers =       _dereq_( './audio/sampler' )( Gibber )
-Gibber.PostProcessing = _dereq_( './audio/postprocessing' )( Gibber )
-Gibber.Utilities =      _dereq_( './utilities' )( Gibber )
-Gibber.Arp =            _dereq_( './audio/arp' )( Gibber )
+Gibber.Utilities = _dereq_( './utilities' )( Gibber )
+Gibber.Audio = _dereq_( './audio' )( Gibber )
 
 module.exports = Gibber
 
 })()
-},{"./audio/analysis":3,"./audio/arp":4,"./audio/audio_input":5,"./audio/bus":6,"./audio/drums":7,"./audio/envelopes":8,"./audio/fx":9,"./audio/oscillators":10,"./audio/postprocessing":11,"./audio/sampler":12,"./audio/synths":13,"./audio/theory":14,"./clock":15,"./dollar":16,"./seq":19,"./utilities":20,"gibberish-dsp":1}],18:[function(_dereq_,module,exports){
+},{"./audio":3,"./dollar":17,"./utilities":21}],19:[function(_dereq_,module,exports){
 !function() {  
   var mappings = {
     outputCurves: {
@@ -4702,7 +4731,7 @@ module.exports = Gibber
   
   module.exports = mappings
 }()
-},{}],19:[function(_dereq_,module,exports){
+},{}],20:[function(_dereq_,module,exports){
 !function() {
   
   //"use strict"
@@ -5017,7 +5046,7 @@ module.exports = Gibber
   module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Seqs }
   
 }()
-},{"./dollar":16,"gibberish-dsp":1}],20:[function(_dereq_,module,exports){
+},{"./dollar":17,"gibberish-dsp":1}],21:[function(_dereq_,module,exports){
 !function() {
 "use strict"
 
@@ -5267,6 +5296,6 @@ var soloGroup = [],
 
 }()
 
-},{"./clock":15,"./dollar":16,"gibberish-dsp":1}]},{},[17])
-(17)
+},{"./clock":16,"./dollar":17,"gibberish-dsp":1}]},{},[18])
+(18)
 });

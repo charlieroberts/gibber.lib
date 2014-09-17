@@ -3,7 +3,7 @@
   
   var $ = require( '../dollar' ),//require('zepto-browserify').Zepto,
       Gibberish = require( 'gibberish-dsp' ),
-      Gibber,
+      Gibber,// = require( '../gibber' ),
       curves = require('../mappings').outputCurves,
       LINEAR = curves.LINEAR,
       LOGARITHMIC = curves.LOGARITHMIC
@@ -59,7 +59,7 @@
           set: function() {}
         })
       
-        $.extend( true, obj, Gibber.ugen )
+        $.extend( true, obj, Gibber.Audio.ugenTemplate )
         
         obj.fx.ugen = obj
         
@@ -99,7 +99,7 @@
     
     obj.type = 'FX'
   
-    $.extend( true, obj, Gibber.ugen )
+    $.extend( true, obj, Gibber.Audio.ugenTemplate )
     
     obj.fx.ugen = obj
     
@@ -133,5 +133,4 @@
   }
   
   module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Busses }
-  
 }()
