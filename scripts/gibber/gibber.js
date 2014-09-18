@@ -13,16 +13,7 @@ var Gibber = {
   started:false,
   
   export: function( target ) {
-    target.future = Gibber.Utilities.future
-    target.solo = Gibber.Utilities.solo    
-    
-    Gibber.Utilities.rndi = Gibber.Audio.Core.rndi
-    Gibber.Utilities.rndf = Gibber.Audio.Core.rndf    
-    
-    target.Rndi = Gibber.Utilities.Rndi
-    target.Rndf = Gibber.Utilities.Rndf     
-    target.rndi = Gibber.Utilities.rndi
-    target.rndf = Gibber.Utilities.rndf 
+    Gibber.Utilities.export( target )
     
     Gibber.Audio.export( target )
   },
@@ -53,7 +44,7 @@ var Gibber = {
         Gibber.Utilities.rndf = Gibber.Audio.Core.rndf
         Gibber.Utilities.Rndi = Gibber.Audio.Core.Rndi
         Gibber.Utilities.Rndf = Gibber.Audio.Core.Rndf
-        
+          
         $.extend( Gibber, Gibber.Audio )
       }
       
@@ -228,7 +219,7 @@ var Gibber = {
   },
   
   clear : function() {
-    Gibber.Audio.clear();
+    if( Gibber.Audio ) Gibber.Audio.clear();
     
     if( Gibber.Graphics ) Gibber.Graphics.clear()
 

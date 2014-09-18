@@ -3480,16 +3480,7 @@ var Gibber = {
   started:false,
   
   export: function( target ) {
-    target.future = Gibber.Utilities.future
-    target.solo = Gibber.Utilities.solo    
-    
-    Gibber.Utilities.rndi = Gibber.Audio.Core.rndi
-    Gibber.Utilities.rndf = Gibber.Audio.Core.rndf    
-    
-    target.Rndi = Gibber.Utilities.Rndi
-    target.Rndf = Gibber.Utilities.Rndf     
-    target.rndi = Gibber.Utilities.rndi
-    target.rndf = Gibber.Utilities.rndf 
+    Gibber.Utilities.export( target )
     
     Gibber.Audio.export( target )
   },
@@ -3520,7 +3511,7 @@ var Gibber = {
         Gibber.Utilities.rndf = Gibber.Audio.Core.rndf
         Gibber.Utilities.Rndi = Gibber.Audio.Core.Rndi
         Gibber.Utilities.Rndf = Gibber.Audio.Core.Rndf
-        
+          
         $.extend( Gibber, Gibber.Audio )
       }
       
@@ -3695,7 +3686,7 @@ var Gibber = {
   },
   
   clear : function() {
-    Gibber.Audio.clear();
+    if( Gibber.Audio ) Gibber.Audio.clear();
     
     if( Gibber.Graphics ) Gibber.Graphics.clear()
 
@@ -5049,6 +5040,7 @@ var soloGroup = [],
     Synths = { Presets: {} },
     Gibberish = _dereq_( 'gibberish-dsp' ),
     Clock = _dereq_('./clock')( Gibber ),
+    rnd = Math.random,
 
     Utilities = {
       seq : function() {
@@ -5271,6 +5263,165 @@ var soloGroup = [],
       },
       gibberArray: function( arr ) {
         
+      },
+      rndf : function(min, max, number, canRepeat) {
+        canRepeat = typeof canRepeat === "undefined" ? true : canRepeat;
+      	if(typeof number === "undefined" && typeof min != "object") {
+      		if(arguments.length == 1) {
+      			max = arguments[0]; min = 0;
+      		}else if(arguments.length == 2) {
+      			min = arguments[0];
+      			max = arguments[1];
+      		}else{
+      			min = 0;
+      			max = 1;
+      		}
+
+      		var diff = max - min,
+      		    r = Math.random(),
+      		    rr = diff * r
+	
+      		return min + rr;
+      	}else{
+      		var output = [];
+      		var tmp = [];
+      		if(typeof number === "undefined") {
+      			number = max || min.length;
+      		}
+		
+      		for(var i = 0; i < number; i++) {
+      			var num;
+      			if(typeof arguments[0] === "object") {
+      				num = arguments[0][rndi(0, arguments[0].length - 1)];
+      			}else{
+      				if(canRepeat) {
+      					num = Utilities.rndf(min, max);
+      				}else{
+                num = Utilities.rndf(min, max);
+                while(tmp.indexOf(num) > -1) {
+                  num = Utilities.rndf(min, max);
+                }
+      					tmp.push(num);
+      				}
+      			}
+      			output.push(num);
+      		}
+      		return output;
+      	}
+      },
+  
+      Rndf : function() {
+        var _min, _max, quantity, random = Math.random, canRepeat;
+    
+        if(arguments.length === 0) {
+          _min = 0; _max = 1;
+        }else if(arguments.length === 1) {
+          _max = arguments[0]; _min = 0;
+        }else if(arguments.length === 2) {
+          _min = arguments[0]; _max = arguments[1];
+        }else if(arguments.length === 3) {
+          _min = arguments[0]; _max = arguments[1]; quantity = arguments[2];
+        }else{
+          _min = arguments[0]; _max = arguments[1]; quantity = arguments[2]; canRepeat = arguments[3];
+        }    
+  
+        return function() {
+          var value, min, max, range;
+    
+          min = typeof _min === 'function' ? _min() : _min
+          max = typeof _max === 'function' ? _max() : _max
+      
+          if( typeof quantity === 'undefined') {
+            value = Utilities.rndf( min, max )
+          }else{
+            value = Utilities.rndf( min, max, quantity, canRepeat )
+          }
+    
+          return value;
+        }
+      },
+
+      rndi : function( min, max, number, canRepeat ) {
+        var range;
+    
+        if(arguments.length === 0) {
+          min = 0; max = 1;
+        }else if(arguments.length === 1) {
+          max = arguments[0]; min = 0;
+        }else if( arguments.length === 2 ){
+          min = arguments[0]; max = arguments[1];
+        }else{
+          min = arguments[0]; max = arguments[1]; number = arguments[2]; canRepeat = arguments[3];
+        }    
+  
+        range = max - min
+        if( range < number ) canRepeat = true
+  
+        if( typeof number === 'undefined' ) {
+          range = max - min
+          return Math.round( min + Math.random() * range );
+        }else{
+      		var output = [];
+      		var tmp = [];
+		
+      		for(var i = 0; i < number; i++) {
+      			var num;
+      			if(canRepeat) {
+      				num = Utilities.rndi(min, max);
+      			}else{
+      				num = Utilities.rndi(min, max);
+      				while(tmp.indexOf(num) > -1) {
+      					num = Utilities.rndi(min, max);
+      				}
+      				tmp.push(num);
+      			}
+      			output.push(num);
+      		}
+      		return output;
+        }
+      },
+
+      Rndi : function() {
+        var _min, _max, quantity, random = Math.random, round = Math.round, canRepeat, range;
+    
+        if(arguments.length === 0) {
+          _min = 0; _max = 1;
+        }else if(arguments.length === 1) {
+          _max = arguments[0]; _min = 0;
+        }else if(arguments.length === 2) {
+          _min = arguments[0]; _max = arguments[1];
+        }else if(arguments.length === 3) {
+          _min = arguments[0]; _max = arguments[1]; quantity = arguments[2];
+        }else{
+          _min = arguments[0]; _max = arguments[1]; quantity = arguments[2]; canRepeat = arguments[3];
+        }  
+  
+        range = _max - _min
+        if( typeof quantity === 'number' && range < quantity ) canRepeat = true
+  
+        return function() {
+          var value, min, max, range;
+    
+          min = typeof _min === 'function' ? _min() : _min
+          max = typeof _max === 'function' ? _max() : _max
+    
+          if( typeof quantity === 'undefined') {
+            value = Utilities.rndi( min, max )
+          }else{
+            value = Utilities.rndi( min, max, quantity, canRepeat )
+          }
+    
+          return value;
+        }
+      },
+      export : function( target ) {
+        target.rndi = Utilities.rndi
+        target.rndf = Utilities.rndf
+        target.Rndi = Utilities.Rndi
+        target.Rndf = Utilities.Rndf
+        
+        target.future = Utilities.future
+        target.solo = Utilities.solo
       },
       init: function() {
         // window.solo = Utilities.solo
