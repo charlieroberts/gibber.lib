@@ -88,7 +88,7 @@
       
         obj.type = 'Gen'
         
-        $.extend( true, obj, Gibber.ugen )
+        $.extend( true, obj, Gibber.Audio.ugenTemplate )
         
         obj.fx.ugen = obj
         
@@ -137,7 +137,7 @@
     obj.type = 'Gen'
     obj.children = []
     
-    $.extend( true, obj, Gibber.ugen )
+    $.extend( true, obj, Gibber.Audio.ugenTemplate )
     
     obj.fx.ugen = obj
   
@@ -336,7 +336,7 @@
     obj.type = 'Gen'
     obj.children = []
     
-    $.extend( true, obj, Gibber.ugen )
+    $.extend( true, obj, Gibber.Audio.ugenTemplate )
     
     obj.fx.ugen = obj
   
@@ -353,9 +353,9 @@
   	}*/
 	  
     // connect in note method
-    obj.kick = Gibber.Percussion.Kick().disconnect()//new Gibberish.Kick()//.connect( obj )
-    obj.snare = Gibber.Percussion.Snare().disconnect()//new Gibberish.Snare()//.connect( obj )
-    obj.hat = Gibber.Percussion.Hat().disconnect()//new Gibberish.Hat()//.connect( obj )
+    obj.kick = Gibber.Audio.Percussion.Kick().disconnect()//new Gibberish.Kick()//.connect( obj )
+    obj.snare = Gibber.Audio.Percussion.Snare().disconnect()//new Gibberish.Snare()//.connect( obj )
+    obj.hat = Gibber.Audio.Percussion.Hat().disconnect()//new Gibberish.Hat()//.connect( obj )
     
     obj.kick.connect( obj )
     obj.snare.connect( obj )

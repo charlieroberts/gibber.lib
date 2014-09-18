@@ -232,7 +232,7 @@
         obj.type = 'FX'
         obj.name = name
       
-        $.extend( true, obj, Gibber.ugen )
+        $.extend( true, obj, Gibber.Audio.ugenTemplate )
         
         Gibber.createProxyProperties( obj, _mappingProperties[ name ] ) 
         

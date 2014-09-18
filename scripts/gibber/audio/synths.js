@@ -120,7 +120,7 @@
         obj = new Gibberish[ type ]({ maxVoices: mv, useADSR:adsr, requireReleaseTrigger:requireReleaseTrigger, scale:scale }).connect( Gibber.Master )
         obj.type = 'Gen'
         
-        $.extend( true, obj, Gibber.ugen )
+        $.extend( true, obj, Gibber.Audio.ugenTemplate )
         
         obj.fx.ugen = obj
         
@@ -214,8 +214,8 @@
   Synths.Presets.Synth = {
   	short:  { attack: 44, decay: 1/16, },
   	bleep:  { waveform:'Sine', attack:44, decay:1/16 },
-    rhodes: { waveform:'Sine', maxVoices:4, presetInit: function() { this.fx.add( Gibber.FX.Tremolo(2, .2) ) }, attack:44, decay:1 },
-    calvin: { waveform:'PWM',  maxVoices:4, amp:.075, presetInit: function() { this.fx.add( Gibber.FX.Delay(1/6,.5), Gibber.FX.Vibrato() ) }, attack:44, decay:1/4 }    
+    rhodes: { waveform:'Sine', maxVoices:4, presetInit: function() { this.fx.add( Gibber.Audio.FX.Tremolo(2, .2) ) }, attack:44, decay:1 },
+    calvin: { waveform:'PWM',  maxVoices:4, amp:.075, presetInit: function() { this.fx.add( Gibber.Audio.FX.Delay(1/6,.5), Gibber.Audio.FX.Vibrato() ) }, attack:44, decay:1/4 }    
   }
   
   Synths.Presets.Synth2 = {
@@ -227,7 +227,7 @@
   	short : { attack: 44, decay: 1/16,},
   
   	lead : {
-  		presetInit : function() { this.fx.add( Gibber.FX.Delay(1/4, .35), Gibber.FX.Reverb() ) },
+  		presetInit : function() { this.fx.add( Gibber.Audio.FX.Delay(1/4, .35), Gibber.Audio.FX.Reverb() ) },
   		attack: 1/8,
   		decay:1/2,
   		octave3:0,
@@ -240,7 +240,7 @@
   	winsome : {
   		presetInit : function() { 
         //this.fx.add( Delay(1/4, .35), Reverb() ) 
-        this.lfo = Gibber.Oscillators.Sine( .234375 )._
+        this.lfo = Gibber.Audio.Oscillators.Sine( .234375 )._
         
         this.lfo.amp = .075
         this.lfo.frequency = 2
@@ -286,7 +286,7 @@
   		attack: Clock.maxMeasures,
   		decay:2,
       presetInit: function() {
-        this.fx.add( Gibber.FX.Delay(1/6, .3) )
+        this.fx.add( Gibber.Audio.FX.Delay( Clock.time(1/6), .3) )
       },
       amp:.3,
   		octave2:0,
@@ -320,7 +320,7 @@
       detune3:0,
       detune2:0,
       filterMult:0,
-      presetInit: function() { this.fx.add( Gibber.FX.Gain(.1), Gibber.FX.Delay(1/6,.35) ) }
+      presetInit: function() { this.fx.add( Gibber.Audio.FX.Gain(.1), Gibber.Audio.FX.Delay(1/6,.35) ) }
     },
   }
   
@@ -333,8 +333,8 @@
 			decay	: 1/8,
       amp:.1,
       presetInit: function() {
-        this.bus = Gibber.Busses.Bus().fx.add( Gibber.FX.Delay(1/8,.75), Gibber.FX.LPF({ resonance:4 }) )
-        this.bus.fx[1].cutoff = Gibber.Binops.Add(.25, Gibber.Oscilators.Sine(.1,.2)._ )
+        this.bus = Gibber.Busses.Bus().fx.add( Gibber.Audio.FX.Delay(1/8,.75), Gibber.Audio.FX.LPF({ resonance:4 }) )
+        this.bus.fx[1].cutoff = Gibber.Binops.Add(.25, Gibber.Audio.Oscillators.Sine(.1,.2)._ )
         this.send( this.bus, .65 )
       },
     },

@@ -64,7 +64,7 @@
             args = Array.prototype.slice.call( arguments, 0 )
            
         oscillator.type = 'Gen'
-        $.extend( true, oscillator, Gibber.ugen )
+        $.extend( true, oscillator, Gibber.Audio.ugenTemplate )
         
         oscillator.fx.ugen = oscillator
         
@@ -116,7 +116,7 @@
     
     oscillator.type = 'Gen'
 
-    $.extend( true, oscillator, Gibber.ugen )
+    $.extend( true, oscillator, Gibber.Audio.ugenTemplate )
 
     oscillator.fx.ugen = oscillator
     
@@ -206,7 +206,7 @@
     
     oscillator.type = 'Gen'
 
-    $.extend( true, oscillator, Gibber.ugen )
+    $.extend( true, oscillator, Gibber.Audio.ugenTemplate )
 
     oscillator.fx.ugen = oscillator
 
