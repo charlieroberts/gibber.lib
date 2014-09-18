@@ -3482,7 +3482,9 @@ var Gibber = {
   export: function( target ) {
     Gibber.Utilities.export( target )
     
-    Gibber.Audio.export( target )
+    if( Gibber.Audio ) {
+      Gibber.Audio.export( target )
+    }
   },
   
   init: function( _options ) {                        
@@ -3501,34 +3503,31 @@ var Gibber = {
       
       if( typeof _options === 'object' ) $.extend( options, _options )
       
-      Gibber.Audio.init() 
+      if( Gibber.Audio ) {
+        Gibber.Audio.init() 
       
-      if( options.globalize ) {
-        options.target.Master = Gibber.Audio.Master    
-        Gibber.export( options.target )        
-      }else{
-        Gibber.Utilities.rndi = Gibber.Audio.Core.rndi
-        Gibber.Utilities.rndf = Gibber.Audio.Core.rndf
-        Gibber.Utilities.Rndi = Gibber.Audio.Core.Rndi
-        Gibber.Utilities.Rndf = Gibber.Audio.Core.Rndf
-          
-        $.extend( Gibber, Gibber.Audio )
+        if( options.globalize ) {
+          options.target.Master = Gibber.Audio.Master    
+          Gibber.export( options.target )        
+        }else{
+          $.extend( Gibber, Gibber.Audio )
+        }
       }
       
       options.target.$ = $ // TODO: geez louise
             
       Gibber.Utilities.init()
       
-      Gibber.isInstrument = true
+      // Gibber.isInstrument = true
   },
-  interfaceIsReady : function() {
-    if( !Gibber.started ) {
-      if( typeof Gibber.Audio.context.currentTime !== 'undefined' ) {
-        Gibber.started = true
-        if( Gibber.isInstrument ) eval( loadFile.text )
-      }
-    }
-  },
+  // interfaceIsReady : function() {
+  //   if( !Gibber.started ) {
+  //     if( typeof Gibber.Audio.context.currentTime !== 'undefined' ) {
+  //       Gibber.started = true
+  //       if( Gibber.isInstrument ) eval( loadFile.text )
+  //     }
+  //   }
+  // },
   Modules : {},
  	import : function( path, exportTo ) {
     var _done = null;

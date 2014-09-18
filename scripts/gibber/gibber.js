@@ -15,7 +15,9 @@ var Gibber = {
   export: function( target ) {
     Gibber.Utilities.export( target )
     
-    Gibber.Audio.export( target )
+    if( Gibber.Audio ) {
+      Gibber.Audio.export( target )
+    }
   },
   
   init: function( _options ) {                        
@@ -34,34 +36,31 @@ var Gibber = {
       
       if( typeof _options === 'object' ) $.extend( options, _options )
       
-      Gibber.Audio.init() 
+      if( Gibber.Audio ) {
+        Gibber.Audio.init() 
       
-      if( options.globalize ) {
-        options.target.Master = Gibber.Audio.Master    
-        Gibber.export( options.target )        
-      }else{
-        Gibber.Utilities.rndi = Gibber.Audio.Core.rndi
-        Gibber.Utilities.rndf = Gibber.Audio.Core.rndf
-        Gibber.Utilities.Rndi = Gibber.Audio.Core.Rndi
-        Gibber.Utilities.Rndf = Gibber.Audio.Core.Rndf
-          
-        $.extend( Gibber, Gibber.Audio )
+        if( options.globalize ) {
+          options.target.Master = Gibber.Audio.Master    
+          Gibber.export( options.target )        
+        }else{
+          $.extend( Gibber, Gibber.Audio )
+        }
       }
       
       options.target.$ = $ // TODO: geez louise
             
       Gibber.Utilities.init()
       
-      Gibber.isInstrument = true
+      // Gibber.isInstrument = true
   },
-  interfaceIsReady : function() {
-    if( !Gibber.started ) {
-      if( typeof Gibber.Audio.context.currentTime !== 'undefined' ) {
-        Gibber.started = true
-        if( Gibber.isInstrument ) eval( loadFile.text )
-      }
-    }
-  },
+  // interfaceIsReady : function() {
+  //   if( !Gibber.started ) {
+  //     if( typeof Gibber.Audio.context.currentTime !== 'undefined' ) {
+  //       Gibber.started = true
+  //       if( Gibber.isInstrument ) eval( loadFile.text )
+  //     }
+  //   }
+  // },
   Modules : {},
  	import : function( path, exportTo ) {
     var _done = null;
@@ -94,25 +93,29 @@ var Gibber = {
         }
       )
     }else{
-      $script.get( path, function() { 
-        // can't be guaranteed a that a module will be created... 
+      var script = document.createElement( 'script' )
+      script.src = path
+      
+      script.onload = function () {
         console.log( 'Module ' + path + ' is now loaded.' )
         if( _done !== null ) { _done() }
-      })
+      };
+
+      document.head.appendChild( script )
     }
     return { done: function( fcn ) { _done =  fcn } }
  	},  
   
-  log: function( msg ) { 
-    //console.log( "LOG", typeof msg )
-    if( typeof msg !== 'undefined' ) {
-      if( typeof msg !== 'function') {
-        console.log( msg )
-      }else{
-        console.log( 'Function' )
-      }
-    }
-  },
+  // log: function( msg ) { 
+  //   //console.log( "LOG", typeof msg )
+  //   if( typeof msg !== 'undefined' ) {
+  //     if( typeof msg !== 'function') {
+  //       console.log( msg )
+  //     }else{
+  //       console.log( 'Function' )
+  //     }
+  //   }
+  // },
   
   scriptCallbacks: [],
   
