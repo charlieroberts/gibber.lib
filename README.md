@@ -26,22 +26,17 @@ The library can be used with plain script tags, CommonJS or AMD style includes. 
 <body></body>
 
 <script>
-Gibber.init() // REQUIRED!
+Gibber.init() // REQUIRED
 
-// change root of global scale every other measure
-// this will affect both bass and lead parts
-Gibber.scale.root.seq( ['c4','eb4'], 2)
+a = EDrums('x*ox*xo-') // make a drum beat
+a.snare.snappy = 1     // set the noise level in the snare
 
-// create bass monosynth and sequence 1/8 note octaves
-a = Mono('bass').note.seq( [0,7], 1/8 )
+a.fx.add( Reverb() )   // add reverb to drums
 
-// simple kick / snare drum pattern
-b = EDrums('xoxo')
-b.snare.snappy = 1
+b = TorusKnot({ scale:2 }).spin(.001) // create a knot geometry
 
-// create lead synth and sequence with random notes/durations
-c = Mono('easyfx')
-  .note.seq( Rndi(0,12), [1/4,1/8,1/2,1,2].rnd( 1/8,4 ) )
+c = Dots() // add a halftone shader effect
+c.scale = Master.Out // scale of dots tracks master audio output
 </script>
 
 </html>
@@ -55,6 +50,6 @@ Gibber.init()
 ``` 
 
 ## Notes
-Right now only audio works, but I'll be adding interaction and graphics soon. Also note that `Drums` do not work because I haven't figured out resource management yet and `Drums` uses audio samples. However, `EDrums` (which uses synthesis) works fine. 
+Note that `Drums` do not work because I haven't figured out resource management yet and `Drums` uses audio samples. However, `EDrums` (which uses synthesis) works fine. 
 
 I'd eventually like to have three separate builds: one for audio, one for graphics, and one for both.
