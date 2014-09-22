@@ -2,7 +2,6 @@
 //"use strict" 
 // can't use strict because eval is used to evaluate user code in the run method
 // I should wrap this in a Function call instead...
-
 var $ = require( './dollar' )
 
 var Gibber = {
@@ -14,35 +13,15 @@ var Gibber = {
   started:false,
   
   export: function( target ) {
-    $.extend( target, Gibber.Busses )       
-    $.extend( target, Gibber.Oscillators )
-    $.extend( target, Gibber.Synths )
-    $.extend( target, Gibber.Percussion )
-    $.extend( target, Gibber.Envelopes )
-    $.extend( target, Gibber.FX )
-    $.extend( target, Gibber.Seqs )    
-    $.extend( target, Gibber.Samplers )
-    $.extend( target, Gibber.PostProcessing )      
-    $.extend( target, Gibber.Theory )
-    $.extend( target, Gibber.Analysis ) 
+    Gibber.Utilities.export( target )
     
-    target.future = Gibber.Utilities.future
-    target.solo = Gibber.Utilities.solo    
+    if( Gibber.Audio ) {
+      Gibber.Audio.export( target )
+    }
     
-		target.Clock = Gibber.Clock
-    target.Seq = Gibber.Seq
-    target.Arp = Gibber.Arp // move Arp to sequencers?
-    target.ScaleSeq = Gibber.ScaleSeq
-
-    target.Rndi = Gibber.Utilities.Rndi
-    target.Rndf = Gibber.Utilities.Rndf     
-    target.rndi = Gibber.Utilities.rndi
-    target.rndf = Gibber.Utilities.rndf
-
-		target.module = Gibber.import
-    Gibber.Audio.Time.export( target )
-    target.sec = target.seconds
-    Gibber.Audio.Binops.export( target )    
+    if( Gibber.Graphics ) {
+      Gibber.Graphics.export( target )
+    }
   },
   
   init: function( _options ) {                        
@@ -56,87 +35,44 @@ var Gibber = {
       var options = {
         globalize: true,
         canvas: null,
-        target: window
+        target: window,
+        graphicsMode:'3d'
       }
       
-      Gibber.Utilities.Rndi = Gibber.Audio.Rndi
-      Gibber.Utilities.Rndf = Gibber.Audio.Rndf
-      Gibber.Utilities.rndi = Gibber.Audio.rndi
-      Gibber.Utilities.rndf = Gibber.Audio.rndf
-      
       if( typeof _options === 'object' ) $.extend( options, _options )
-
-      $.extend( Gibber.Presets, Gibber.Synths.Presets )
-      $.extend( Gibber.Presets, Gibber.Percussion.Presets )
-      $.extend( Gibber.Presets, Gibber.FX.Presets )
-      $.extend( Gibber.Presets, Gibber.FX.Presets )
       
-      $.extend( Gibber.Binops, Gibber.Audio.Binops )
+      if( Gibber.Audio ) {
+        Gibber.Audio.init() 
       
-      if( options.globalize ) Gibber.export( options.target )
+        if( options.globalize ) {
+          options.target.Master = Gibber.Audio.Master    
+        }else{
+          $.extend( Gibber, Gibber.Audio )
+        }
+      }
       
-      options.target.$ = $ // geez louise
+      if( Gibber.Graphics ) {
+        Gibber.Graphics.init( options.graphicsMode )
+      }
+      
+      if( options.globalize ) {
+        Gibber.export( options.target )
+      }
+      
+      options.target.$ = $ // TODO: geez louise
             
       Gibber.Utilities.init()
       
-      // post-processing depends on having context instantiated
-      var __onstart = null
-      if( Gibber.Audio.onstart ) __onstart = Gibber.Audio.onstart
-      
-      if( !Gibber.Audio.context ) { Gibber.Audio.context = { sampleRate:44100 } }
-      
-      Gibber.Audio.onstart = function() {
-  			//Gibber.Esprima = window.esprima
-        //Gibber.AudioPostProcessing.init()
-        //Gibber.interfaceIsReady()
-        
-        Gibber.Clock.start( true )
-                
-        if( __onstart !== null ) { __onstart() }
-      }
-      
-      Gibber.Audio.init()
-      
-      Gibber.Master = Gibber.Busses.Bus().connect( Gibber.Audio.out )
-
-      if( options.globalize ) {
-        options.target.Master = Gibber.Master
-      }
-
-      Gibber.Master.type = 'Bus'
-      Gibber.Master.name = 'Master'
-
-      $.extend( true, Gibber.Master, Gibber.ugen ) 
-      Gibber.Master.fx.ugen = Gibber.Master
-      
-      Gibber.isInstrument = true// window.isInstrument // TODO: better way to do this without global?
-      //Gibber.createMappingAbstractions( Master, Gibber.Busses.mappingProperties )
-      
-      // override so that all ugens connect to Gibber's Master bus by default
-      Gibber.Audio.ugen.connect = 
-        Gibber.Audio._oscillator.connect =
-        Gibber.Audio._synth.connect =
-        Gibber.Audio._effect.connect =
-        Gibber.Audio._bus.connect =
-        Gibber.connect;
-        
-      Gibber.Audio.defineUgenProperty = Gibber.defineUgenProperty
-      
-      //$script.ready('environment', function() {
-        //if( !window.isInstrument ) {
-        //  Gibber.Clock.addMetronome( Gibber.Environment.Metronome )
-        //}
-      Gibber.scale = Gibber.Theory.Scale( 'c4','Minor' )
-      //})
+      // Gibber.isInstrument = true
   },
-  interfaceIsReady : function() {
-    if( !Gibber.started ) {
-      if( typeof Gibber.Audio.context.currentTime !== 'undefined' ) {
-        Gibber.started = true
-        if( Gibber.isInstrument ) eval( loadFile.text )
-      }
-    }
-  },
+  // interfaceIsReady : function() {
+  //   if( !Gibber.started ) {
+  //     if( typeof Gibber.Audio.context.currentTime !== 'undefined' ) {
+  //       Gibber.started = true
+  //       if( Gibber.isInstrument ) eval( loadFile.text )
+  //     }
+  //   }
+  // },
   Modules : {},
  	import : function( path, exportTo ) {
     var _done = null;
@@ -169,90 +105,29 @@ var Gibber = {
         }
       )
     }else{
-      $script.get( path, function() { 
-        // can't be guaranteed a that a module will be created... 
+      var script = document.createElement( 'script' )
+      script.src = path
+      
+      script.onload = function () {
         console.log( 'Module ' + path + ' is now loaded.' )
         if( _done !== null ) { _done() }
-      })
+      };
+
+      document.head.appendChild( script )
     }
     return { done: function( fcn ) { _done =  fcn } }
  	},  
-  // override for Gibber.Audio method
-  defineUgenProperty : function(key, initValue, obj) {
-    var isTimeProp = Gibber.Clock.timeProperties.indexOf(key) > -1,
-        prop = obj.properties[key] = {
-          value:  isTimeProp ? Gibber.Clock.time( initValue ) : initValue,
-          binops: [],
-          parent : obj,
-          name : key,
-        },
-        mappingName = key.charAt(0).toUpperCase() + key.slice(1);
-    
-    Object.defineProperty(obj, key, {
-      configurable: true,
-      get: function() { return prop.value },
-      set: function(val) { 
-        if( obj[ mappingName ] && obj[ mappingName ].mapping ) {
-          if( obj[ mappingName ].mapping.remove )
-            obj[ mappingName ].mapping.remove( true ) // pass true to avoid setting property inside of remove method
-        }
-
-        prop.value = isTimeProp ? Gibber.Clock.time( val ) : val
-        
-        Gibber.Audio.dirty(obj);
-      },
-    });
-
-    obj[key] = prop.value
-  },
   
-  // override for Gibber.Audio method
-  polyInit : function(ugen) {
-    ugen.mod = ugen.polyMod;
-    ugen.removeMod = ugen.removePolyMod;
-    
-    for( var key in ugen.polyProperties ) {
-      (function( _key ) {
-        var value = ugen.polyProperties[ _key ],
-            isTimeProp = Gibber.Clock.timeProperties.indexOf( _key ) > -1
-
-        Object.defineProperty(ugen, _key, {
-          get : function() { return value; },
-          set : function( val ) { 
-            for( var i = 0; i < ugen.children.length; i++ ) {
-              ugen.children[ i ][ _key ] = isTimeProp ? Gibber.Clock.time( val ) : val;
-            }
-          },
-        });
-        
-      })( key );
-    }
-  },
-  
-  // override for Gibber.Audio method to use master bus
-  connect : function( bus, position ) {
-    if( typeof bus === 'undefined' ) bus = Gibber.Master
-    
-    if( this.destinations.indexOf( bus ) === -1 ){
-      bus.addConnection( this, 1, position )
-      if( position !== 0 ) {
-        this.destinations.push( bus )
-      }
-    }
-    
-    return this
-  },
-
-  log: function( msg ) { 
-    //console.log( "LOG", typeof msg )
-    if( typeof msg !== 'undefined' ) {
-      if( typeof msg !== 'function') {
-        console.log( msg )
-      }else{
-        console.log( 'Function' )
-      }
-    }
-  },
+  // log: function( msg ) { 
+  //   //console.log( "LOG", typeof msg )
+  //   if( typeof msg !== 'undefined' ) {
+  //     if( typeof msg !== 'function') {
+  //       console.log( msg )
+  //     }else{
+  //       console.log( 'Function' )
+  //     }
+  //   }
+  // },
   
   scriptCallbacks: [],
   
@@ -358,27 +233,8 @@ var Gibber = {
     return obj
   },
   
-  stopAudio: function() {    
-    Gibber.Audio.analysisUgens.length = 0
-    Gibber.Audio.sequencers.length = 0
-    
-    for( var i = 0; i < Gibber.Master.inputs.length; i++ ) {
-      Gibber.Master.inputs[ i ].value.disconnect()
-    }
-    
-    Gibber.Master.inputs.length = 0
-    
-    Gibber.Clock.reset()
-    
-    Gibber.Master.fx.remove()
-    
-    Gibber.Master.amp = 1
-    
-    console.log( 'Audio stopped.')
-  },
-  
   clear : function() {
-    this.stopAudio();
+    if( Gibber.Audio ) Gibber.Audio.clear();
     
     if( Gibber.Graphics ) Gibber.Graphics.clear()
 
@@ -529,7 +385,7 @@ var Gibber = {
     // }
     
     if( !obj.seq ) {
-      obj.seq = Gibber.Seqs.Seq({ doNotStart:true, scale:obj.scale, priority:priority })
+      obj.seq = Gibber.Audio.Seqs.Seq({ doNotStart:true, scale:obj.scale, priority:priority })
     }
     
     fnc.seq = function( v,d ) {  
@@ -746,7 +602,7 @@ var Gibber = {
     obj.gibber = true // keyword identifying gibber object, needed for notation parser
     
     if( !obj.seq && shouldSeq ) {
-      obj.seq = Gibber.Seqs.Seq({ doNotStart:true, scale:obj.scale })      
+      obj.seq = Gibber.Audio.Seqs.Seq({ doNotStart:true, scale:obj.scale })      
     }
     
     obj.mappingProperties = mappingProperties
@@ -758,228 +614,12 @@ var Gibber = {
       }
     }
   },  
-  
-  object: {
-    class: null,
-    text : null,
-    init: function( classIdentifier ) {
-      this.class = classIdentifier
-      this.text = $( '.' + classIdentifier )
-    },
-  },
-  
-  ugen: {
-    sequencers : [],
-    mappings: [],
-    fx: $.extend( [], {
-      add: function() {
-        var end = this.length === 0 ? this.ugen : this[ this.length - 1 ]
-        
-        end.disconnect()
-        
-        for( var i = 0; i < arguments.length; i++ ) {
-          var fx = arguments[ i ]
-          fx.input = end
-          
-          end = fx
-          
-          this.push( fx )
-        }
-        
-        if( this.ugen !== Gibber.Master ) {
-          end.connect()
-        }else{
-          end.connect( Gibber.Audio.out )
-        }
-                
-        return this.ugen
-      },
-      
-      remove: function() {
-        if( arguments.length > 0 ) {
-          for( var i = 0; i < arguments.length; i++ ) {
-            var arg = arguments[ i ];
-						
-						if( typeof arg === 'string' ) { // if identified using the fx name
-							for( var j = 0; j < this.length; j++ ) {
-								if( this[ j ].name === arg ) {
-									this.remove( j )
-								}
-							}
-							continue;
-						}
-						
-            if( typeof arg === 'number' ) { // if identified via position in fx chain
-							var ugenToRemove = this[ arg ]
-							ugenToRemove.disconnect()
-              this.splice( arg, 1 )
-							
-              if( typeof this[ arg ] !== 'undefined') {
-								
-								// reset input for current position in chain
-								var newConnectionNumber = arg - 1
-								if( newConnectionNumber !== -1 ) {
-									this[ arg ].input = this[ newConnectionNumber ]
-								}else{
-									this[ arg ].input = this.ugen
-								}
-								
-								// reset input for next position in chain, or connect to Master bus
-                if( typeof this[ arg + 1 ] !== 'undefined' ) { // if there is another fx ahead in chain...
-                  this[ arg + 1 ].input = arg === 0 ? this.ugen : this[ arg ]
-                }else{
-                  if( this.ugen !== Gibber.Master ) {
-                    this.ugen.connect( Gibber.Master )
-                  }else{
-                    this.ugen.connect( Gibber.Audio.out )
-                  }
-                }
-              }else{
-                if( this.length > 0 ) { // if there is an fx behind in chain
-                  this[ arg - 1 ].connect( Gibber.Master )
-                }else{
-                  if( this.ugen !== Gibber.Master ) {
-                    this.ugen.connect( Gibber.Master ) // no more fx
-                  }else{
-                    this.ugen.connect( Gibber.Audio.out )
-                  }
-                }
-              }
-            }
-          }
-        }else{ // remove all fx
-          if( this.length > 0) {
-            this[ this.length - 1 ].disconnect()
-            if( this.ugen !== Gibber.Master ) {
-              this.ugen.connect( Gibber.Master )
-            }else{
-              this.ugen.connect( Gibber.Audio.out )
-            }
-            this.ugen.codegen()
-            this.length = 0
-          }else{
-            Gibber.log( this.ugen.name + ' does not have any fx to remove. ')
-          }
-        }
-      },
-    }),
-      
-    replaceWith: function( replacement ) {
-      for( var i = 0; i < this.destinations.length; i++ ) {
-        replacement.connect( this.destinations[i] )
-      }
-      
-      for( var i = 0; i < this.sequencers.length; i++ ) {
-        this.sequencers[ i ].target = replacement
-        replacement.sequencers.push( this.sequencers[i] )
-      }
-      
-      for( var i = 0; i < this.mappingObjects.length; i++ ) {
-        var mapping = this.mappingObjects[ i ]
-
-        if( mapping.targets.length > 0 ) {
-          for( var j = 0; j < mapping.targets.length; j++ ) {
-            var _mapping = mapping.targets[ j ]
-            
-            if( replacement.mappingProperties[ mapping.name ] ) {
-              _mapping[ 0 ].mapping.replace( replacement, mapping.name, mapping.Name )
-            }else{ // replacement object does not have property that was assigned to mapping
-              _mapping[ 0 ].mapping.remove()
-            }
-          }
-        }
-      }
-  
-      this.kill()
-    },
-
-    kill: function() { 
-      var end = this.fx.length !== 0 ? this.fx[ this.fx.length - 1 ] : this
-      if( this.seq.isRunning ) this.seq.disconnect()
-      end.disconnect()
-      
-      for( var i = 0; i < this.fx.length; i++ ) {
-        var fx = this.fx[ i ]
-        if( fx.seq.isRunning ) fx.seq.disconnect()
-      }
-      
-      this.disconnect()
-      
-      for( var i = 0; i < this.mappings.length; i++ ) {
-        this.mappings[ i ].remove() 
-      }
-      
-      if( this.clearMarks ) // check required for modulators
-        this.clearMarks()
-      
-      console.log( this.name + " has been terminated.")
-    },
-
-    play: function( notes, durations, repeat ) {
-      if( this.note ) {
-        this.note.seq( notes, durations )
-      }else if( this.frequency ) {
-        this.frequency.seq( notes, durations )
-      }
-      
-      return this
-    },
-
-    // stop : function() {
-    //   if( this.seq ) this.seq.stop()
-    // },
-    // start : function() {
-    //   if( this.seq ) this.seq.start()
-    // },
-    
-    fadeIn : function( _time, endLevel ) {
-      if( isNaN( endLevel ) ) {
-        endLevel = 1
-      }
-
-      var time = Gibber.Clock.time( _time ),
-          decay = new Gibber.Audio.ExponentialDecay({ decayCoefficient:.05, length:time }),
-          //ramp = Mul( Sub(1,decay), endLevel )
-          line = new Gibber.Audio.Line( 0, endLevel, time )
-          
-      this.amp = line
-      
-      future( function() { this.amp = endLevel }.bind( this ), time)
-      
-      return this
-    },
-    
-    fadeOut : function( _time ) {
-      var time = Gibber.Clock.time( _time ),
-          decay = new Gibber.Audio.ExponentialDecay({ decayCoefficient:.00005, length:time }),
-          //ramp = Mul( decay, this.amp() )
-          line = new Gibber.Audio.Line( this.amp(), 0, Gibber.Clock.time( time ) )
-          
-      this.amp = line
-      
-      future( function() { this.amp = 0 }.bind( this ), time )
-      
-      return this
-    },
-  }
 }
 
-Gibber.Audio =          require( 'gibberish-dsp' )
-Gibber.Clock =          require( './clock' )( Gibber )
-Gibber.Seqs =           require( './seq')( Gibber )
-Gibber.Theory =         require( './audio/theory' )( Gibber )
-Gibber.FX =             require( './audio/fx' )( Gibber )
-Gibber.Oscillators =    require( './audio/oscillators' )( Gibber )
-Gibber.Synths =         require( './audio/synths' )( Gibber )
-Gibber.Busses =         require( './audio/bus' )( Gibber )
-Gibber.Analysis =       require( './audio/analysis' )( Gibber )
-Gibber.Envelopes =      require( './audio/envelopes' )( Gibber )
-Gibber.Percussion =     require( './audio/drums' )( Gibber )
-Gibber.Input =          require( './audio/audio_input' )( Gibber )
-Gibber.Samplers =       require( './audio/sampler' )( Gibber )
-Gibber.PostProcessing = require( './audio/postprocessing' )( Gibber )
-Gibber.Utilities =      require( './utilities' )( Gibber )
-Gibber.Arp =            require( './audio/arp' )( Gibber )
+Gibber.Utilities = require( './utilities' )( Gibber )
+Gibber.Audio    = require( 'gibber.audio.lib/scripts/gibber/audio' )( Gibber )
+Gibber.Graphics = require( 'gibber.graphics.lib/scripts/gibber/graphics/graphics' )( Gibber )
+Gibber.mappings = require( './mappings' )( Gibber, Gibber.Audio.Core )
 
 module.exports = Gibber
 
