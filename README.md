@@ -11,7 +11,7 @@ You can simply download the repo and skip straight to the usage section if you d
 2. Inside the top level of the repo, run `npm install` in the terminal.
 3. Run `gulp`. This is a build module that is installed in step 2.
 
-The build outputs a single UMD file, gibber.lib.js.
+The build outputs a UMD file, gibber.lib.js, and a minified version.
 
 ## Usage
 The library can be used with plain script tags, CommonJS or AMD style includes. Below is an example HTML file that plays a simple drum beat, bass line, and random melody.
@@ -50,6 +50,4 @@ Gibber.init()
 ``` 
 
 ## Notes
-Note that `Drums` do not work because I haven't figured out resource management yet and `Drums` uses audio samples. However, `EDrums` (which uses synthesis) works fine. 
-
-I'd eventually like to have three separate builds: one for audio, one for graphics, and one for both.
+Note that `Drums` do not work because I haven't figured out resource management yet and `Drums` uses audio samples. However, `EDrums` (which uses synthesis) works fine.
