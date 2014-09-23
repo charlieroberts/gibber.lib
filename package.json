@@ -1,6 +1,6 @@
 {
   "name": "gibber.lib",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "standalone libraries from Gibber to include in web pages",
   "repository": {
     "type": "git",
