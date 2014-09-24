@@ -52,7 +52,8 @@ var Gibber = {
       }
       
       if( Gibber.Graphics ) {
-        Gibber.Graphics.init( options.graphicsMode )
+        // this happens dynamically when a graphics object is first created to save CPU
+        // Gibber.Graphics.init( options.graphicsMode ) 
       }
       
       if( options.globalize ) {
@@ -84,14 +85,17 @@ var Gibber = {
         Gibber.Environment.SERVER_URL + '/gibber/'+path, {},
         function( d ) {
           d = JSON.parse( d )
-          eval( d.text )
+                    
+          var f = new Function( "return " + d.text )
+          
+          Gibber.Modules[ path ] = f()
           
           if( exportTo && Gibber.Modules[ path ] ) {
             $.extend( exportTo, Gibber.Modules[ path ] )
-            Gibber.Modules[ path ] = exportTo
-          }  
+            //Gibber.Modules[ path ] = exportTo
+          }
           if( Gibber.Modules[ path ] ) {
-            if( Gibber.Modules[ path ].init ) {
+            if( typeof Gibber.Modules[ path ].init === 'function' ) {
               Gibber.Modules[ path ].init()
             }
             console.log( 'Module ' + path + ' is now loaded.' )
