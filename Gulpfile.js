@@ -10,10 +10,10 @@ gulp.task( 'client', function(){
     .pipe( browserify({ standalone:'Gibber', bare:true }) )
     .pipe( rename('gibber.lib.js') )
     .pipe( gulp.dest('./build/') )
-    // .pipe( buffer() )
-    // .pipe( uglify() )
-    // .pipe( rename('gibber.lib.min.js') )
-    // .pipe( gulp.dest('./build/') )
+    .pipe( buffer() )
+    .pipe( uglify() )
+    .pipe( rename('gibber.lib.min.js') )
+    .pipe( gulp.dest('./build/') )
     
     return out
 });

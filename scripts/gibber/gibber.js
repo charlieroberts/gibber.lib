@@ -22,6 +22,10 @@ var Gibber = {
     if( Gibber.Graphics ) {
       Gibber.Graphics.export( target )
     }
+    
+    if( Gibber.Interface ) {
+      Gibber.Interface.export( target )
+    }
   },
   
   init: function( _options ) {                        
@@ -55,6 +59,8 @@ var Gibber = {
         // this happens dynamically when a graphics object is first created to save CPU
         // Gibber.Graphics.init( options.graphicsMode ) 
       }
+      
+      if( Gibber.Interface ) {}
       
       if( options.globalize ) {
         Gibber.export( options.target )
@@ -621,9 +627,10 @@ var Gibber = {
 }
 
 Gibber.Utilities = require( './utilities' )( Gibber )
-Gibber.Audio    = require( 'gibber.audio.lib/scripts/gibber/audio' )( Gibber )
-Gibber.Graphics = require( 'gibber.graphics.lib/scripts/gibber/graphics/graphics' )( Gibber )
-Gibber.mappings = require( './mappings' )( Gibber, Gibber.Audio.Core )
+Gibber.Audio     = require( 'gibber.audio.lib/scripts/gibber/audio' )( Gibber )
+Gibber.Graphics  = require( 'gibber.graphics.lib/scripts/gibber/graphics/graphics' )( Gibber )
+Gibber.Interface = require( 'gibber.interface.lib/scripts/gibber/interface/interface' )( Gibber )
+Gibber.mappings  = require( './mappings' )( Gibber, Gibber.Audio.Core )
 
 module.exports = Gibber
 

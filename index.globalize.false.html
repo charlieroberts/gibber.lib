@@ -12,17 +12,15 @@
 // don't globalize Gibber (export into the window object)
 Gibber.init({ globalize:false })
 
-Gibber.scale.root.seq( ['c4','eb4'], 2)
+a = Gibber.Percussion.EDrums('x*o*x*o-')
+a.snare.snappy = 1
+a.fx.add( Gibber.FX.Reverb() )
 
-a = Gibber.Synths.Mono('bass').note.seq( [0,7], 1/8 )
+b = Gibber.Graphics.Geometry.TorusKnot({ scale:2 }).spin(.001)
 
-b = Gibber.Percussion.EDrums('xoxo')
-b.snare.snappy = 1
+c = Gibber.Graphics.PostProcessing.Dots()
+c.scale = Gibber.Master.Out;
 
-b.fx.add( Gibber.FX.Reverb() )
-
-c = Gibber.Synths.Mono('easyfx')
-  .note.seq( Gibber.Utilities.Rndi(0,12), [1/4,1/8,1/2,1,2].rnd( 1/8,4 ) )
 </script>
 
 </html>
