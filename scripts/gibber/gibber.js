@@ -52,7 +52,7 @@ var Gibber = {
           options.target.Master = Gibber.Audio.Master    
         }else{
           $.extend( Gibber, Gibber.Audio )
-        }
+        }        
       }
       
       if( Gibber.Graphics ) {
