@@ -311,7 +311,6 @@ module.exports = function( Gibber, Gibberish ) {
       audioOut : function( target, from ) {
         console.log( target.Name, target.object )
         if( typeof target.object[ target.Name ].mapping === 'undefined') {
-          console.log("MAKING A MAPPING")
           var mapping = target.object[ target.Name ].mapping = Gibber.Audio.Core.Binops.Map( null, target.min, target.max, 0, 1, 0 )   
           if( typeof from.object.track !== 'undefined' ) {
             mapping.follow = from.object.track
@@ -393,6 +392,16 @@ module.exports = function( Gibber, Gibberish ) {
           }else{
             console.log( 'removing update ')
             //target.object.update = function() {}
+          }
+          
+          target.object.mappings.splice( target.object.mappings.indexOf( mapping ), 1 )
+          from.object.mappings.splice( from.object.mappings.indexOf( mapping ), 1 ) 
+          
+          var targets = target.object[ target.Name ].targets,
+              idx = targets.indexOf( mappings )
+          
+          if( idx !== -1 ) {
+            targets.splice( idx, 1 )
           }
           
           delete target.object[ target.Name ].mapping

@@ -379,6 +379,10 @@ var Gibber = {
     
     target.object.mappings.push( mapping )
     
+    if( typeof from.object.mappings === 'undefined' ) from.object.mappings = []
+    
+    from.object.mappings.push( mapping )
+    
     Gibber.defineSequencedProperty( target.object[ target.Name ], 'invert' )
   },
   
