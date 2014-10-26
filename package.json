@@ -18,7 +18,7 @@
     "gibberish-dsp": "~2.1.4",
     "gibber.audio.lib": "0.0.2",
     "gibber.graphics.lib": "0.0.1",
-    "gibber.core.lib" : "0.0.0"
+    "gibber.core.lib" : "0.0.1"
   },
   "dependencies": {
     "web-audio-api": "~0.1.5"
