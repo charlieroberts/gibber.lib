@@ -26,7 +26,7 @@
   "bugs": {
     "url": "https://github.com/charlieroberts/gibber.lib/issues"
   },
-  "main": "./scripts/gibber/gibber.lib.js",
+  "main": "./scripts/gibber/gibber.lib.js",
   "scripts": {
     "test": "node ./scripts/tests/gibber.lib.node.test.js"
   },
