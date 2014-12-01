@@ -6543,8 +6543,7 @@ Gibberish.PolySeq = function() {
     timeModifier  : null,
     add           : function( seq ) {
       seq.valuesIndex = seq.durationsIndex = 0
-      
-      
+
       if( seq.durations === null ) {
         seq.autofire = true
         that.autofire.push( seq )
@@ -6587,8 +6586,9 @@ Gibberish.PolySeq = function() {
             var seq = seqs[ j ]
             if( seq.shouldStop ) continue;
 
-            var idx = seq.values.pick ? seq.values.pick() : seq.valuesIndex++ % seq.values.length,
-                val = seq.values[ idx ];
+            var idx = seq.values.pick ? seq.values.pick() : seq.valuesIndex++ % seq.values.length
+            
+            var val = typeof seq.values === 'function' ? seq.values() : seq.values[ idx ];
     
             if(typeof val === 'function') { val = val(); } // will also call anonymous function
     
@@ -6604,15 +6604,16 @@ Gibberish.PolySeq = function() {
              
             if( Array.isArray( seq.durations ) ) {
               var idx = seq.durations.pick ? seq.durations.pick() : seq.durationsIndex++,
-                  next = seq.durations[ idx ]
+                  next = typeof seq.durations === 'function' ? seq.durations() : seq.durations[ idx ]
 
               newNextTime = typeof next === 'function' ? next() : next;
-              if( seq.durationsIndex >= seq.durations.length ) {
+              if( typeof seq.durations !== 'function' && seq.durationsIndex >= seq.durations.length ) {
                 seq.durationsIndex = 0;
               }
               if( that.chose ) that.chose( 'durations', idx )
             }else{
-              var next = seq.durations;
+              var next = typeof seq.durations === 'function' ? seq.durations() : seq.durations;
+                            
               newNextTime = typeof next === 'function' ? next() : next;
             }
         
@@ -7921,7 +7922,6 @@ Arp = function(notation, beats, pattern, mult, scale) {
   		this.notation = _chord;
 		
   		if(typeof this.scale === 'undefined' || this.scale === null && typeof _chord === 'string') {
-        console.log( 'redoing notes...')
   			for(var i = 0; i < this.mult; i++) {
   				var tmp = [];
 			
@@ -7955,10 +7955,10 @@ Arp = function(notation, beats, pattern, mult, scale) {
   				arr = arr.concat(tmp);
   			}	
   		}			
-      this.notes = this.patterns[ this.pattern ]( arr )
+      this.notes = Gibber.construct( Gibber.Pattern, this.patterns[ this.pattern ]( arr ) )
       
       if( this.seqs[0] ) {
-        this.seqs[0].values = this.notes
+        this.seqs[0].values = [ this.notes ]
       }
   	},
 	
@@ -7969,7 +7969,15 @@ Arp = function(notation, beats, pattern, mult, scale) {
 		
   		this.chord(_chord, shouldReset); // also sets sequence
   	},
+    
+    shuffle: function() {
+      this.notes.shuffle()
+    },
 		
+    reset: function() {
+      this.notes.reset()
+    },
+    
 	  patterns : {
     	up : function(array) {
     		return array;
@@ -7995,10 +8003,10 @@ Arp = function(notation, beats, pattern, mult, scale) {
   that.seq = that
   
   // I have no idea why I need this
-  that.__shuffle = that.shuffle 
-  that.shuffle = function() {
-    that.__shuffle()
-  }
+  // that.__shuffle = that.shuffle 
+  // that.shuffle = function() {
+  //   that.__shuffle()
+  // }
   
   Gibber.createProxyMethods( that, [ 'shuffle','reset','chord' ] )
   
@@ -8611,12 +8619,26 @@ module.exports = function( Gibber ) {
               seq = seq.split('').rnd()
             }
             
-            if( typeof props[1] !== 'undefined') { duration = props[1] }
+            if( typeof props[1] !== 'undefined') { 
+              duration = props[1]
+              if( !Array.isArray( duration ) ) duration = [ duration ]
+              
+              var durationsPattern = Gibber.construct( Gibber.Pattern, duration )
+        
+              if( duration.randomFlag ) {
+                durationsPattern.filters.push( function() { return [ durationsPattern.values[ rndi(0, durationsPattern.values.length - 1) ], 1 ] } )
+                for( var i = 0; i < duration.randomArgs.length; i+=2 ) {
+                  durationsPattern.repeat( duration.randomArgs[ i ], duration.randomArgs[ i + 1 ] )
+                }
+              }
+              
+              duration = durationsPattern
+            }
             
             obj.seq.add({
               key:'note',
-              values:seq,
-              durations:duration,
+              values: Gibber.construct( Gibber.Pattern, seq ),
+              durations: Gibber.construct( Gibber.Pattern, [duration] ),
               target:obj
             })
           }
@@ -8673,10 +8695,9 @@ module.exports = function( Gibber ) {
           var note = nt[ i ]
 
           if( typeof note === 'string' ) {
-        		for( var key in this.kit ) {
-        			if( note === this.kit[ key ].symbol ) {
-                console.log( p )
-        				this[ key ].sampler.note( p, this[key].amp );
+        		for( var key in obj.kit ) {
+        			if( note === obj.kit[ key ].symbol ) {
+        				obj[ key ].sampler.note( p, obj[key].amp );
                 //var p = p //this.pitch() 
                 // if( this[ key ].sampler.pitch !== p )
                   // this[ key ].sampler.pitch = p
@@ -8692,11 +8713,11 @@ module.exports = function( Gibber ) {
         }
       }else{
         if( typeof nt === 'string' ) {
-      		for( var key in this.kit ) {
-      			if( nt === this.kit[ key ].symbol ) {
+      		for( var key in obj.kit ) {
+      			if( nt === obj.kit[ key ].symbol ) {
               //console.log("PITCH", p )
-      				this[ key ].sampler.note( p, this[key].amp );
-              this[ key ].sampler.pitch = p
+      				obj[ key ].sampler.note( p, obj[key].amp );
+              obj[ key ].sampler.pitch = p
               //var p = this.pitch.value //this.pitch() 
               // if( this[ key ].sampler.pitch !== p )
               //   this[ key ].sampler.pitch = p
@@ -8708,7 +8729,7 @@ module.exports = function( Gibber ) {
               num = Math.abs( nt ),
               key = keys[ num % keys.length ], 
               drum = obj[ key ]
-              
+          
           drum.sampler.note( p, drum.sampler.amp )
           
           // if( drum.sampler.pitch !== p )
@@ -8819,20 +8840,31 @@ module.exports = function( Gibber ) {
             if( seq.indexOf('.rnd(') > -1) {// || seq.indexOf('.random(') > -1 ) {
               seq = seq.split( '.rnd' )[0]
               seq = seq.split('').rnd()
-            }else if( seq.indexOf('.random(') > -1 ) {
-              seq = seq.split( '.random' )[0]
-              seq = seq.split('').rnd()
             }
             
-            if( typeof props[1] !== 'undefined') { duration = props[1] }
+            if( typeof props[1] !== 'undefined') { 
+              duration = props[1]
+              if( !Array.isArray( duration ) ) duration = [ duration ]
+              
+              var durationsPattern = Gibber.construct( Gibber.Pattern, duration )
+        
+              if( duration.randomFlag ) {
+                durationsPattern.filters.push( function() { return [ durationsPattern.values[ rndi(0, durationsPattern.values.length - 1) ], 1 ] } )
+                for( var i = 0; i < duration.randomArgs.length; i+=2 ) {
+                  durationsPattern.repeat( duration.randomArgs[ i ], duration.randomArgs[ i + 1 ] )
+                }
+              }
+              
+              duration = durationsPattern
+            }
             
             obj.seq.add({
               key:'note',
-              values:seq,
-              durations:duration,
+              values: Gibber.construct( Gibber.Pattern, seq ),
+              durations: Gibber.construct( Gibber.Pattern, [duration] ),
               target:obj
             })
-          }  
+          } 
           
           break;
         case 'object':
@@ -9478,7 +9510,7 @@ module.exports = function( Gibber ) {
     }
   }
   
-  FX.Presets.StereoReverb = {
+  FX.Presets.StereoVerb = {
   	space : {
   		roomSize: .99,
   		damping: .23,
@@ -10356,38 +10388,6 @@ module.exports = function( Gibber ) {
   var Gibberish = _dereq_( 'gibberish-dsp' ),
       $ = Gibber.dollar,
       doNotSequence = [ 'durations', 'target', 'scale', 'offset', 'doNotStart', 'priority' ]
-
-  var makeNoteFunction = function( notes, obj ) {
-    var _note = $.extend( [], notes ),
-        count = 0
-
-    return [function() {
-      var idx, freq
-    
-      if( typeof _note.pick === 'function' ) {
-        idx =  _note[ _note.pick() ] 
-      }else if( typeof _note[ count ] === 'function') {
-        idx = _note[ count ]()
-      }else{
-        idx = _note[ count++ ]
-      }
-      
-      if( typeof obj.scale.notes[ idx ] === 'number' ) {
-        freq = obj.scale.notes[ idx ]
-      }else{
-        try{
-          freq = obj.scale.notes[ idx ].fq()
-        }catch(e) {
-          console.error( "The frequency could not be obtained from the current scale. Did you specify an invalid mode or root note?")
-          obj.stop()
-        }
-      }          
-      //freq = typeof obj.scale.notes[ idx ] === 'number' ? obj.scale.notes[ idx ] : obj.scale.notes[ idx ].fq()			
-      if( count >= _note.length ) count = 0
-			
-      return freq
-    }]
-  }
   
   var makeChordFunction = function( notes, obj ) {
     var _note = $.extend( [], notes ),
@@ -10436,46 +10436,84 @@ module.exports = function( Gibber ) {
       if( typeof arg.scale === 'object' ) obj.scale = arg.scale
       if( typeof arg.offset === 'number' ) obj.offset = Gibber.Clock.time( arg.offset )
       
-      if( durationsType === 'array') {
-        obj.durations = arg.durations
-      }else if( durationsType !== 'undefined') {
-        obj.durations = [ arg.durations ]
-      }else{ }
+      // if( durationsType === 'object') {
+      //   obj.durations = arg.durations
+      // }else if( durationsType !== 'undefined') {
+      //   obj.durations = [ arg.durations ]
+      // }else{ }
+      obj.durations = arg.durations 
             
       obj.keysAndValues = {}
       obj.seqs = []
       obj.autofire = []
-      
-      for( var key in arg ) {
-        if( doNotSequence.indexOf( key ) === -1 ) {
-          var isArray = Array.isArray( arg[key] )// $.type( arg[ key ] )
-          
-          var _seq = {
-            key: key,
-            target: obj.target,
-            durations:obj.durations
+
+      if( obj.durations ) {
+        if( !Array.isArray( obj.durations) ) { obj.durations = [ obj.durations ] }
+        
+        var durationsPattern = Gibber.construct( Gibber.Pattern, obj.durations )
+        
+        if( obj.durations.randomFlag ) {
+          durationsPattern.filters.push( function() { return [ durationsPattern.values[ rndi(0, durationsPattern.values.length - 1) ], 1 ] } )
+          for( var i = 0; i < obj.durations.randomArgs.length; i+=2 ) {
+            durationsPattern.repeat( obj.durations.randomArgs[ i ], obj.durations.randomArgs[ i + 1 ] )
           }
-          
-          if( isArray ) {
-            _seq.values = arg[ key ]
-          }else if( typeof arg[ key ] !== 'undefined' ) {
-            _seq.values = [ arg[ key ] ]
-          }
-                    
-          obj.seqs.push( _seq )
-          keyList.push( key )
         }
+      }
+      
+      for( var _key in arg ) {
+        !function() {
+          var key = _key
+          if( doNotSequence.indexOf( key ) === -1 ) {
+            var isArray = Array.isArray( arg[key] )// $.type( arg[ key ] )
+          
+            var _seq = {
+              key: key,
+              target: obj.target,
+              durations: durationsPattern,
+            }
+          
+            var valuesPattern
+            if( isArray ) {
+              valuesPattern = Gibber.construct( Gibber.Pattern, arg[ key ] )
+            }else if( typeof arg[ key ] !== 'undefined' ) {
+              valuesPattern = Gibber.construct( Gibber.Pattern, [ arg[ key ] ] )//[ arg[ key ] ]
+            }
+          
+            if( arg[ key ].randomFlag ) {
+              valuesPattern.filters.push( function() { return [ valuesPattern.values[ rndi(0, valuesPattern.values.length - 1) ], 1 ] } )
+              for( var i = 0; i < arg[ key ].randomArgs.length; i+=2 ) {
+                valuesPattern.repeat( arg[ key ].randomArgs[ i ], arg[ key ].randomArgs[ i + 1 ] )
+              }
+            }
+            
+            if( key === 'note' ) {
+              valuesPattern.filters.push( function() { 
+                var output = arguments[ 0 ][ 0 ]
+                if( output < Gibber.minNoteFrequency ) {
+                  output = obj.scale.notes[ output ]
+                }
+                
+                return [ output, arguments[0][1] ] 
+              })
+            }
+            
+            _seq.values = valuesPattern
+        
+            obj.seqs.push( _seq )
+            keyList.push( key )
+          }
+        }()
       }
       
       if( 'scale' in obj ) {
         var noteIndex = keyList.indexOf( 'note' ),
             chordIndex = keyList.indexOf( 'chord' )
             
-            //  var makeNoteFunction = function( notes, obj ) {
+        //var makeNoteFunction = function( notes, obj ) {
 
-        if( noteIndex > -1 ) {
-          obj.seqs[ noteIndex ].values = makeNoteFunction( obj.seqs[ noteIndex ].values, obj )
-        }
+        // if( noteIndex > -1 ) {
+        //   obj.seqs[ noteIndex ].values = makeNoteFunction( obj.seqs[ noteIndex ].values, obj )
+        // }
         
         if( chordIndex > -1 ) {
           var _chord = $.extend( [], obj.seqs[ chordIndex ] ),
@@ -10552,9 +10590,9 @@ module.exports = function( Gibber ) {
         Object.defineProperty( _seq, key, {
           get: function() { return _seq.seqs[ _i ].values },
           set: function(v) {
-            if( key === 'note' && _seq.scale ) {
-              v = makeNoteFunction( v, _seq )
-            }
+            // if( key === 'note' && _seq.scale ) {
+            //   v = makeNoteFunction( v, _seq )
+            // }
             _seq.seqs[ _i ].values = v  
           }
         })
@@ -10605,37 +10643,14 @@ module.exports = function( Gibber ) {
       return this
     },
     reset : function() {
-      if( Object.keys( this.save ).length !== 0 ) {
-        for( var key in this.save ) {
-          var val = this.save[ key ]
-          for( var i = 0; i < this.seqs.length; i++ ) {
-            if( this.seqs[ i ].key === key ) {
-              if( Array.isArray( val ) ) {
-                this.seqs[ i ].values = this.save[ key ].slice(0)
-              }else{
-                this.seqs[ i ].values = this.save[ key ]
-              }
-              break;
-            }
-          }
-        }
+      for( var i = 0; i < this.seqs.length; i++ ) {  
+        this.seqs[ i ].values[0].reset()
       }
     },
-    shuffle : function() { // original Gibberish.PolySeq.shuffle is deleted in constructor after being saved
-      if( Object.keys( this.save ).length === 0 ) {
-        for( var i = 0; i < this.seqs.length; i++ ) {
-          var val = this.seqs[ i ].values
-          if( Array.isArray( val ) ) {
-            this.save[ this.seqs[ i ].key ] = val.slice(0)
-          }else{
-            this.save[ this.seqs[ i ].key ] = val
-          }
-        }
+    shuffle : function() {
+      for( var i = 0; i < this.seqs.length; i++ ) {
+        this.seqs[ i ].values[0].shuffle()
       }
-      
-      var args = Array.prototype.slice.call( arguments, 0 )
-        
-      this.oldShuffle.apply( this, args )
     },
   })
   
@@ -10646,7 +10661,6 @@ module.exports = function( Gibber ) {
     args.root = args.root || 'c4'
     args.mode = args.mode || 'aeolian'
     
-    console.log( args )
     scale = Gibber.Theory.Scale( args.root, args.mode )
     
     delete args.root; delete args.mode
@@ -10790,7 +10804,7 @@ module.exports = function( Gibber ) {
         obj.fx.ugen = obj
         
         if( name === 'Mono' ) {
-                  obj.note = function( _frequency, amp ) {
+            obj.note = function( _frequency, amp ) {
             if(typeof amp !== 'undefined' && amp !== 0) this.amp = amp;
               
             if( amp !== 0 ) {
@@ -11122,8 +11136,8 @@ var Theory = {
   			return _chord;
   		},
 		
-  		create : function( __root ) {
-        var __root = typeof __root !== 'number' ? teoria.note( __root ).fq() : __root,
+  		create : function() {
+        var __root = typeof root !== 'number' ? teoria.note( root ).fq() : root,
             __mode = mode
         
   			this.notes.length = 0
@@ -11132,6 +11146,8 @@ var Theory = {
   				var scale = Gibber.Theory.Scales[ __mode ]( __root )
   				scale.create( __root )// this.degree.value )
   				this.notes = scale.notes
+  			}else{
+  			  console.log( "No scale for the mode " + mode + " exists." )
   			}
   		},
 		
@@ -11146,26 +11162,26 @@ var Theory = {
   		},
   	};
 	  
-  	var mode = _mode || "aeolian";
-  	Object.defineProperty( that, "mode", {
+  	var mode = _mode || 'aeolian';
+  	Object.defineProperty( that, 'mode', {
       configurable:true,
   		get: function() { return mode; },
   		set: function( val ) { 
         mode = val; 
-        that.create( _root ); 
+        that.create(); 
       }	
   	});
     
     var root = _root || 440;
-    Object.defineProperty(that, "root", {
+    Object.defineProperty( that, 'root', {
       get : function() { return root; },
       
-      set : function(val) { 
-        if(typeof val === "number") {
+      set : function( val ) { 
+        if( typeof val === 'number' ) {
           root = val;
-        }else if (typeof val === "string") {
+        }else if ( typeof val === 'string' ) {
           root = Theory.Teoria.note( val ).fq();
-        }else if (typeof val === 'object') {
+        }else if ( typeof val === 'object' ) {
           if( val.accidental ) {
             root = val.fq()
           }else{
@@ -11173,24 +11189,16 @@ var Theory = {
           }
         }
         
-        that.create(root); 
+        that.create() 
       }
     });
-    
-    // var degree = that.degree;
-    // Object.defineProperty(that, "degree", {
-    //   configurable:true,
-    //   get: function() { return degree; },
-    //   set: function(val) {
-    //     degree = val;
-    //     that.create( degree );
-    //   }  
-    // });
-	  
+
     // createProxyProperty: function( obj, _key, shouldSeq, shouldRamp, dict, _useMappings ) {
-    
+    // obj, _key, shouldSeq, shouldRamp, dict, _useMappings, priority
     Gibber.createProxyProperty( that, 'root', true, false, null, false, 1 )
     Gibber.createProxyProperty( that, 'mode', true, false, null, false, 1 )
+    //Gibber.defineSequencedProperty( that, 'root', 1 )
+    //Gibber.defineSequencedProperty( that, 'mode', 1 )    
     // Gibber.createProxyProperty( that, 'degree', true, false, null, false, 1 )    
     
     $.subscribe( '/gibber/clear', function() {
@@ -11210,7 +11218,7 @@ var Theory = {
       degree: 1,// ___degree || 1,
       ratios: _ratios || [ 1, 1.10, 1.25, 1.3333, 1.5, 1.666, 1.75 ],
 	
-      create : function(  _root ) {
+      create : function( _root ) {
         this.notes = [];
         
         var scaleRoot = typeof _root === 'number' ? _root : teoria.note( _root ).fq() ;
@@ -11245,24 +11253,8 @@ var Theory = {
     			_chord.push( this.notes[_notes[i] + _offset] );
     		}
     		return _chord;
-    	},	
-    }            
-
-    // var __degree = that.degree;
-    // Object.defineProperty(that, "degree", {
-    //       configurable:true,
-    //   get: function() { return __degree; },
-    //   set: function(val) {
-    //     __degree = val;
-    //     that.create();
-    //   }  
-    // });
-    
-    // var mode = _mode || "aeolian";
-    // Object.defineProperty( that, "mode", {
-    //   get: function() { return mode; },
-    //   set: function( val ) { mode = val; this.create(); }  
-    // });
+    	}
+    }
     
     that.create( _root );
       
@@ -11270,18 +11262,18 @@ var Theory = {
   },
   
   Scales : {
-    Major: function( root ) { return Theory.CustomScale( root, [1, 9/8, 5/4, 4/3, 3/2, 5/3, 15/8 ])},
-    Ionian: function( root ) { return Theory.CustomScale( root, [1, 9/8, 5/4, 4/3, 3/2, 5/3, 15/8 ])},    
-    Dorian: function( root ) { return Theory.CustomScale( root, [1, 9/8, 6/5, 4/3, 3/2, 5/3, 9/5 ])},
-    Phrygian: function( root ) { return Theory.CustomScale( root, [1, 16/15, 6/5, 4/3, 3/2, 8/5, 9/5 ])},
-    Lydian: function( root ) { return Theory.CustomScale( root, [1, 9/8, 5/4, 45/32, 3/2, 5/3, 15/8 ])},
-    Mixolydian: function( root ) { return Theory.CustomScale( root, [1, 9/8, 5/4, 4/3, 3/2, 8/5, 9/5 ])},
-    Minor: function( root ) { return Theory.CustomScale( root, [1, 9/8, 6/5, 4/3, 3/2, 8/5, 9/5 ])},     
-    Aeolian : function( root ) { return Theory.CustomScale( root, [1, 9/8, 6/5, 4/3, 3/2, 8/5, 9/5 ])}, 
-    Locrian : function( root ) { return Theory.CustomScale( root, [1, 16/15, 6/5, 4/3, 62/45, 8/5, 15/8 ])},
+    Major: function( root ) { return Theory.CustomScale( root, [1, 9/8, 5/4, 4/3, 3/2, 5/3, 15/8 ]) },
+    Ionian: function( root ) { return Theory.CustomScale( root, [1, 9/8, 5/4, 4/3, 3/2, 5/3, 15/8 ]) },    
+    Dorian: function( root ) { return Theory.CustomScale( root, [1, 9/8, 6/5, 4/3, 3/2, 5/3, 9/5 ]) },
+    Phrygian: function( root ) { return Theory.CustomScale( root, [1, 16/15, 6/5, 4/3, 3/2, 8/5, 9/5 ]) },
+    Lydian: function( root ) { return Theory.CustomScale( root, [1, 9/8, 5/4, 45/32, 3/2, 5/3, 15/8 ]) },
+    Mixolydian: function( root ) { return Theory.CustomScale( root, [1, 9/8, 5/4, 4/3, 3/2, 8/5, 9/5 ]) },
+    Minor: function( root ) { return Theory.CustomScale( root, [1, 9/8, 6/5, 4/3, 3/2, 8/5, 9/5 ]) },
+    Aeolian : function( root ) { return Theory.CustomScale( root, [1, 9/8, 6/5, 4/3, 3/2, 8/5, 9/5 ]) },
+    Locrian : function( root ) { return Theory.CustomScale( root, [1, 16/15, 6/5, 4/3, 62/45, 8/5, 15/8 ]) },
     MajorPentatonic : function( root ) { return Theory.CustomScale( root, [1, 9/8, 5/4, 3/2, 5/3 ] ) },
     MinorPentatonic : function( root ) { return Theory.CustomScale( root, [1, 6/5, 4/3, 3/2, 15/8] ) },
-    Chromatic: function( root ) { return Theory.CustomScale( root, [1, 16/15, 9/8, 6/5, 5/4, 4/3, 45/32, 3/2, 8/5, 5/3, 15/8, 9/5 ])},
+    Chromatic: function( root ) { return Theory.CustomScale( root, [1, 16/15, 9/8, 6/5, 5/4, 4/3, 45/32, 3/2, 8/5, 5/3, 15/8, 9/5 ]) },
   	// Scales contributed by Luke Taylor
   	// Half-Whole or Octatonic Scale
   	//http://en.wikipedia.org/wiki/Octatonic_scale
@@ -11496,8 +11488,6 @@ var $ = _dereq_( './dollar' )
 var Gibber = {
   dollar: $,
   Presets: {},
-  GraphicsLib: {},
-  Binops: {},
   scale : null,
   minNoteFrequency:50,
   started:false,
@@ -11505,6 +11495,7 @@ var Gibber = {
     LINEAR:0,
     LOGARITHMIC:1
   },
+  Pattern: _dereq_( './pattern' ),
   
   export: function( target ) {
     Gibber.Utilities.export( target )
@@ -11882,25 +11873,18 @@ var Gibber = {
   
   defineSequencedProperty : function( obj, key, priority ) {
     var fnc = obj[ key ], seq, seqNumber
-    
-    // for( var i = obj.seq.seqs.length - 1; i >= 0; i-- ) {
-    //   var s = obj.seq.seqs[ i ]
-    //   if( s.key === key ) {
-    //     seq = s,
-    //     seqNumber = i
-    //     break;
-    //   }
-    // }
-    
+
     if( !obj.seq && Gibber.Audio ) {
       obj.seq = Gibber.Audio.Seqs.Seq({ doNotStart:true, scale:obj.scale, priority:priority, target:obj })
     }
     
-    fnc.seq = function( v,d ) {  
+    fnc.seq = function( _v,_d ) {  
+      var v = $.isArray(_v) ? _v : [_v]
+      var d = $.isArray(_d) ? _d : typeof _d !== 'undefined' ? [_d] : null
       var args = {
             'key': key,
-            values: $.isArray(v) || v !== null && typeof v !== 'function' && typeof v.length === 'number' ? v : [v],
-            durations: $.isArray(d) ? d : typeof d !== 'undefined' ? [d] : null,
+            values: [ Gibber.construct( Gibber.Pattern, v ) ],//$.isArray(v) || v !== null && typeof v !== 'function' && typeof v.length === 'number' ? v : [v],
+            durations: d !== null ? [ Gibber.construct( Gibber.Pattern, d ) ] : null,
             target: obj,
             'priority': priority
           }
@@ -11910,41 +11894,56 @@ var Gibber = {
         obj.seq.seqs.splice( seqNumber, 1 )
       }
       
+      var valuesPattern = args.values[0]
+      if( v.randomFlag ) {
+        valuesPattern.filters.push( function() { return [ valuesPattern.values[ rndi(0, valuesPattern.values.length - 1) ], 1 ] } )
+        for( var i = 0; i < v.randomArgs.length; i+=2 ) {
+          valuesPattern.repeat( v.randomArgs[ i ], v.randomArgs[ i + 1 ] )
+        }
+      }
+      
+      if( d !== null ) {
+        var durationsPattern = args.durations[0]
+        if( d.randomFlag ) {
+          durationsPattern.filters.push( function() { return [ durationsPattern.values[ rndi(0, durationsPattern.values.length - 1) ], 1 ] } )
+          for( var i = 0; i < d.randomArgs.length; i+=2 ) {
+            durationsPattern.repeat( d.randomArgs[ i ], d.randomArgs[ i + 1 ] )
+          }
+        }
+      }
       obj.seq.add( args )
       
       seqNumber = obj.seq.seqs.length - 1
       seq = obj.seq.seqs[ seqNumber ]
       
-      Object.defineProperties( fnc.seq, {
+      Object.defineProperties( fnc, {
         values: {
           configurable:true,
-          get: function() { return obj.seq.seqs[ seqNumber ].values },
-          set: function(v) {
-            if( !Array.isArray(v) ) {
-              v = [ v ]
+          get: function() { return obj.seq.seqs[ seqNumber ].values[ 0 ] },
+          set: function( val ) {
+            var pattern = Gibber.construct( Gibber.Pattern, val )
+            
+            if( !Array.isArray( pattern ) ) {
+              pattern = [ pattern ]
             }
-            if( key === 'note' && obj.seq.scale ) {  
-              v = makeNoteFunction( v, obj.seq )
-            }
-            obj.seq.seqs[ seqNumber ].values = v //.splice( 0, 10000, v )
-            //Gibber.defineSequencedProperty( obj.seq.seqs[ seqNumber ].values, 'reverse' )
+            // if( key === 'note' && obj.seq.scale ) {  
+            //   v = makeNoteFunction( v, obj.seq )
+            // }
+            //console.log("NEW VALUES", v )
+            obj.seq.seqs[ seqNumber ].values = pattern
           }
         },
         durations: {
           configurable:true,
           get: function() { return obj.seq.seqs[ seqNumber ].durations },
-          set: function(v) {
-            if( !Array.isArray(v) ) {
-              v = [ v ]
+          set: function( val ) {
+            if( !Array.isArray( val ) ) {
+              val = [ val ]
             }
-            obj.seq.seqs[ seqNumber ].durations = v   //.splice( 0, 10000, v )
-            //Gibber.defineSequencedProperty( obj.seq.seqs[ seqNumber ].durations, 'reverse' )  
+            obj.seq.seqs[ seqNumber ].durations = val   //.splice( 0, 10000, v )
           }
         },
-      })
-      
-      //Gibber.defineSequencedProperty( obj.seq.seqs[ seqNumber ].values, 'reverse' )
-      //Gibber.defineSequencedProperty( obj.seq.seqs[ seqNumber ].durations, 'reverse' )      
+      })     
       
       if( !obj.seq.isRunning ) {
         obj.seq.offset = Gibber.Clock.time( obj.offset )
@@ -11998,8 +11997,8 @@ var Gibber = {
     }
   },
   
-  createProxyMethods : function( obj, methods ) {
-    for( var i = 0; i < methods.length; i++ ) Gibber.defineSequencedProperty( obj, methods[ i ] ) 
+  createProxyMethods : function( obj, methods, priority ) {
+    for( var i = 0; i < methods.length; i++ ) Gibber.defineSequencedProperty( obj, methods[ i ], priority ) 
   },
   
   defineProperty : function( obj, propertyName, shouldSeq, shouldRamp, mappingsDictionary, shouldUseMappings, priority, useOldGetter ) {
@@ -12134,7 +12133,7 @@ Gibber.mappings  = _dereq_( './mappings' )( Gibber )
 module.exports = Gibber
 
 })()
-},{"./dollar":20,"./mappings":22,"./utilities":23}],22:[function(_dereq_,module,exports){
+},{"./dollar":20,"./mappings":22,"./pattern":23,"./utilities":24}],22:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {  
   var mappings = {
     audio : {
@@ -12782,6 +12781,243 @@ module.exports.outputCurves= {
   LOGARITHMIC:1
 }
 },{}],23:[function(_dereq_,module,exports){
+!function() {
+
+"use strict"
+
+var PatternProto = {
+  concat : function( _pattern ) { this.values = this.values.concat( _pattern.values ) },    
+  toString: function() { return this.values.toString() },
+  valueOf: function() { return this.values },
+  getLength: function() {
+    var l
+    if( this.start < this.end ) {
+      l = this.end - this.start + 1
+    }else{
+      l = this.values.length + this.end - this.start + 1
+    }
+    return l
+  },
+  runFilters : function( val ) {
+    var args = [ val, 1 ] // 1 is phaseModifier
+
+    for( var i = 0; i < this.filters.length; i++ ) {
+      args = this.filters[ i ]( args )
+    }
+
+    return args
+  },
+}
+
+var Pattern = function() {
+  if( ! ( this instanceof Pattern ) ) {
+    var args = Array.prototype.slice.call( arguments, 0 )
+    return Gibber.construct( Pattern, args )
+  }
+
+  var fnc = function() {
+    var len = fnc.getLength(),
+        idx = Math.floor( fnc.start + (fnc.phase % len) ),
+        val = fnc.values[ Math.floor( idx % fnc.values.length ) ],
+        args = fnc.runFilters( val )
+    
+    fnc.phase += fnc.stepSize * args[ 1 ]
+    val = args[ 0 ]
+      
+    if( typeof val === 'function' ) val = val()
+    
+    return val
+  }
+   
+  $.extend( fnc, {
+    start : 0,
+    end   : 0,
+    phase : 0,
+    values : Array.prototype.slice.call( arguments, 0 ),
+    //values : typeof arguments[0] !== 'string' || arguments.length > 1 ? Array.prototype.slice.call( arguments, 0 ) : arguments[0].split(''),    
+    original : null,
+    storage : [],
+    stepSize : 1,
+    integersOnly : false,
+    repeats : [],
+    filters : [],
+
+    range : function() {
+      if( Array.isArray( arguments[0] ) ) {
+        fnc.start = arguments[0][0]
+        fnc.end   = arguments[0][1]
+      }else{
+        fnc.start = arguments[0]
+        fnc.end   = arguments[1]
+      }
+    },
+  
+    reverse : function() { fnc.values.reverse() },
+  
+    // repeat : function() { // repeat a value whenever it is triggered
+    //   var counts = {}
+    // 
+    //   for( var i = 0; i < arguments.length; i +=2 ) {
+    //     counts[ arguments[ i ] ] = {
+    //       phase: 0,
+    //       target: arguments[ i + 1 ]
+    //     }
+    //   }
+    // 
+    //   var filter = function( args ) {
+    //     var value = args[ 0 ], phaseModifier = args[ 1 ], output = [ value, phaseModifier ]
+    //     
+    //     //console.log( args, counts )
+    //     if( counts[ value ] ) {
+    //       counts[ value ].phase++
+    //       if( counts[ value ].phase !== counts[ value ].target ) {
+    //         output[ 1 ] = 0
+    //       }else{
+    //         counts[ value ].phase = 0
+    //         output[ 1 ] = 1
+    //       }
+    //     }
+    //   
+    //     return output
+    //   }
+    // 
+    //   fnc.filters.push( filter )
+    // 
+    //   return fnc
+    // },
+    
+    repeat: function() {
+      var counts = {}
+    
+      for( var i = 0; i < arguments.length; i +=2 ) {
+        counts[ arguments[ i ] ] = {
+          phase: 0,
+          target: arguments[ i + 1 ]
+        }
+      }
+      
+      var repeating = false, repeatValue = null
+      var filter = function( args ) {
+        var value = args[ 0 ], phaseModifier = args[ 1 ], output = [ value, phaseModifier ]
+        
+        //console.log( args, counts )
+        if( repeating === false && counts[ value ] ) {
+          repeating = true
+          repeatValue = value
+        }
+        
+        if( repeating === true ) {
+          if( counts[ repeatValue ].phase !== counts[ repeatValue ].target ) {
+            output[ 0 ] = repeatValue            
+            output[ 1 ] = 0
+            counts[ repeatValue ].phase++
+          }else{
+            counts[ repeatValue ].phase = 0
+            output[ 1 ] = 1
+            if( value !== repeatValue ) { 
+              repeating = false
+            }else{
+              counts[ repeatValue ].phase++
+            }
+          }
+        }
+      
+        return output
+      }
+    
+      fnc.filters.push( filter )
+    
+      return fnc
+    },
+  
+    reset : function() { fnc.values = fnc.original.slice( 0 ) },
+    store : function() { fnc.storage[ fnc.storage.length ] = fnc.values.slice( 0 ) },
+    transpose : function( amt ) { for( var i = 0; i < fnc.values.length; i++ ) fnc.values[ i ] += amt },
+    shuffle : function() { Gibber.Utilities.shuffle( fnc.values ) },
+    scale : function( amt ) { 
+      for( var i = 0; i < fnc.values.length; i++ ) {
+        fnc.values[ i ] = fnc.integersOnly ? Math.round( fnc.values[ i ] * amt ) : fnc.values[ i ] * amt
+      }
+    },
+
+    flip : function() {
+      var start = [],
+          ordered = null
+    
+      ordered = fnc.values.filter( function(elem) {
+      	var shouldPush = start.indexOf( elem ) === -1
+        if( shouldPush ) start.push( elem )
+        return shouldPush
+      })
+    
+      ordered = ordered.sort( function( a,b ){ return a - b } )
+    
+      for( var i = 0; i < fnc.values.length; i++ ) {
+        var pos = ordered.indexOf( fnc.values[ i ] )
+        fnc.values[ i ] = ordered[ ordered.length - pos - 1 ]
+      }
+    
+  		return fnc
+    },
+    
+    invert: function() {
+      var prime0 = fnc.values[ 0 ]
+      
+      for( var i = 1; i < fnc.values.length; i++ ) {
+        var inverse = prime0 + (prime0 - fnc.values[ i ])
+        fnc.values[ i ] = inverse
+      }
+    
+  		return fnc
+    },
+  
+    switch : function( to ) {
+      if( fnc.storage[ to ] ) {
+        fnc.values = fnc.storage[ to ].slice( 0 )
+      }
+    },
+  
+    rotate : function( amt ) {
+      if( amt > 0 ) {
+        while( amt > 0 ) {
+          var end = fnc.values.pop()
+          fnc.values.unshift( end )
+          amt--
+        }
+      }else if( amt < 0 ) {
+        while( amt < 0 ) {
+          var begin = fnc.values.shift()
+          fnc.values.push( begin )
+          amt++
+        }
+      }
+    }
+  })
+    
+  fnc.end = fnc.values.length - 1
+  
+  fnc.original = fnc.values.slice( 0 )
+  fnc.storage[ 0 ] = fnc.original.slice( 0 )
+  
+  fnc.integersOnly = fnc.values.every( function( n ) { return n === +n && n === (n|0); })
+  
+  Gibber.createProxyMethods( fnc, [
+    'rotate','switch','invert','reset', 'flip',
+    'transpose','reverse','shuffle','scale',
+    'store', 'range'
+  ], true )
+  
+  fnc.__proto__ = this.__proto__ 
+  
+  return fnc
+}
+
+Pattern.prototype = PatternProto
+
+module.exports = Pattern
+
+}()
+},{}],24:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
 
 "use strict"
@@ -12823,38 +13059,37 @@ var soloGroup = [],
         return output
       },
       random :  function() {
-        var dict = {},
-            lastChosen = null;
+        this.randomFlag = true
+        this.randomArgs = Array.prototype.slice.call( arguments, 0 )
+        // var dict = {},
+        //     lastChosen = null;
+        //     
+        // for(var i = 0; i < arguments.length; i+=2) {
+        //   dict[ "" + arguments[i] ] = { repeat: arguments[i+1], count: 0 };
+        // }
+        // 
+        // this.pick = function() {
+        //   var value = 0, index, lastValue;
+        //   if(this[lastChosen]) lastValue = this[lastChosen]
+        // 
+        //   if(lastChosen !== null && dict[ lastValue ].count++ <= dict[ lastValue ].repeat) {
+        //     index = lastChosen;
+        //     if( dict[ lastValue ].count >= dict[ lastValue ].repeat) {
+        //       dict[ lastValue ].count = 0;
+        //       lastChosen = null;
+        //     };
+        //   }else{
+        //     index = Utilities.rndi(0, this.length - 1);
+        //     value = this[index];
+        //     if( typeof dict[ ""+value ] !== 'undefined' ) {
+        //       dict[ ""+value ].count = 1;
+        //       lastChosen = index;
+        //     }else{
+        //       lastChosen = null;
+        //     }
+        //   }
     
-        for(var i = 0; i < arguments.length; i+=2) {
-          dict[ "" + arguments[i] ] = { repeat: arguments[i+1], count: 0 };
-        }
-
-        this.pick = function() {
-          var value = 0, index, lastValue;
-          if(this[lastChosen]) lastValue = this[lastChosen]
-
-          if(lastChosen !== null && dict[ lastValue ].count++ <= dict[ lastValue ].repeat) {
-            index = lastChosen;
-            if( dict[ lastValue ].count >= dict[ lastValue ].repeat) {
-              dict[ lastValue ].count = 0;
-              lastChosen = null;
-            };
-          }else{
-            index = Utilities.rndi(0, this.length - 1);
-            value = this[index];
-            if( typeof dict[ ""+value ] !== 'undefined' ) {
-              dict[ ""+value ].count = 1;
-              lastChosen = index;
-            }else{
-              lastChosen = null;
-            }
-          }
-      
-        	return index; // return index, not value as required by secondary notation stuff
-        };
-    
-        return this;
+        return this
       },
   
       random2 : function() {
@@ -13182,18 +13417,18 @@ var soloGroup = [],
         // window.solo = Utilities.solo
         // window.future = Utilities.future // TODO: fix global reference
         Array.prototype.random = Array.prototype.rnd = Utilities.random
-        Array.prototype.weight = Utilities.weight
-        Array.prototype.fill = Utilities.fill
-        Array.prototype.choose = Utilities.choose
-        // Array.prototype.Rnd = Utilities.random2
-        Array.prototype.merge = Utilities.merge
+        // Array.prototype.weight = Utilities.weight
+        // Array.prototype.fill = Utilities.fill
+        // Array.prototype.choose = Utilities.choose
+        // // Array.prototype.Rnd = Utilities.random2
+        // Array.prototype.merge = Utilities.merge
       }  
     }
   
   return Utilities
 }
 
-},{}],24:[function(_dereq_,module,exports){
+},{}],25:[function(_dereq_,module,exports){
 /* MIT license */
 var convert = _dereq_("color-convert"),
     string = _dereq_("color-string");
@@ -13623,7 +13858,7 @@ Color.prototype.setChannel = function(space, index, val) {
    return this;
 }
 
-},{"color-convert":26,"color-string":27}],25:[function(_dereq_,module,exports){
+},{"color-convert":27,"color-string":28}],26:[function(_dereq_,module,exports){
 /* MIT license */
 
 module.exports = {
@@ -14315,7 +14550,7 @@ for (var key in cssKeywords) {
   reverseKeywords[JSON.stringify(cssKeywords[key])] = key;
 }
 
-},{}],26:[function(_dereq_,module,exports){
+},{}],27:[function(_dereq_,module,exports){
 var conversions = _dereq_("./conversions");
 
 var convert = function() {
@@ -14408,7 +14643,7 @@ Converter.prototype.getValues = function(space) {
 });
 
 module.exports = convert;
-},{"./conversions":25}],27:[function(_dereq_,module,exports){
+},{"./conversions":26}],28:[function(_dereq_,module,exports){
 /* MIT license */
 var convert = _dereq_("color-convert");
 
@@ -14622,7 +14857,7 @@ function hexDouble(num) {
   return (str.length < 2) ? "0" + str : str;
 }
 
-},{"color-convert":26}],28:[function(_dereq_,module,exports){
+},{"color-convert":27}],29:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  *
@@ -14670,7 +14905,7 @@ THREE.CopyShader = {
 
 };
 
-},{}],29:[function(_dereq_,module,exports){
+},{}],30:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  */
@@ -14726,7 +14961,7 @@ THREE.DotScreenPass.prototype = {
 
 };
 
-},{}],30:[function(_dereq_,module,exports){
+},{}],31:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  */
@@ -14872,7 +15107,7 @@ THREE.EffectComposer.quad = new THREE.Mesh( new THREE.PlaneGeometry( 2, 2 ), nul
 THREE.EffectComposer.scene = new THREE.Scene();
 THREE.EffectComposer.scene.add( THREE.EffectComposer.quad );
 
-},{}],31:[function(_dereq_,module,exports){
+},{}],32:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  */
@@ -14928,7 +15163,7 @@ THREE.FilmPass.prototype = {
 
 };
 
-},{}],32:[function(_dereq_,module,exports){
+},{}],33:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  */
@@ -15016,7 +15251,7 @@ THREE.ClearMaskPass.prototype = {
 
 };
 
-},{}],33:[function(_dereq_,module,exports){
+},{}],34:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  */
@@ -15069,7 +15304,7 @@ THREE.RenderPass.prototype = {
 
 };
 
-},{}],34:[function(_dereq_,module,exports){
+},{}],35:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  */
@@ -15122,7 +15357,7 @@ THREE.ShaderPass.prototype = {
 
 };
 
-},{}],35:[function(_dereq_,module,exports){
+},{}],36:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  *
@@ -15188,7 +15423,7 @@ THREE.BleachBypassShader = {
 
 };
 
-},{}],36:[function(_dereq_,module,exports){
+},{}],37:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  *
@@ -15239,7 +15474,7 @@ THREE.ColorifyShader = {
 
 };
 
-},{}],37:[function(_dereq_,module,exports){
+},{}],38:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  *
@@ -15309,7 +15544,7 @@ THREE.DotScreenShader = {
 
 };
 
-},{}],38:[function(_dereq_,module,exports){
+},{}],39:[function(_dereq_,module,exports){
 /**
  * @author zz85 / https://github.com/zz85 | https://www.lab4games.net/zz85/blog
  *
@@ -15404,7 +15639,7 @@ THREE.EdgeShader = {
 	].join("\n")
 };
 
-},{}],39:[function(_dereq_,module,exports){
+},{}],40:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  *
@@ -15510,7 +15745,7 @@ THREE.FilmShader = {
 
 };
 
-},{}],40:[function(_dereq_,module,exports){
+},{}],41:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  *
@@ -15603,7 +15838,7 @@ THREE.FocusShader = {
 	].join("\n")
 };
 
-},{}],41:[function(_dereq_,module,exports){
+},{}],42:[function(_dereq_,module,exports){
 /**
  * @author felixturner / http://airtight.cc/
  *
@@ -15665,7 +15900,7 @@ THREE.KaleidoShader = {
 
 };
 
-},{}],42:[function(_dereq_,module,exports){
+},{}],43:[function(_dereq_,module,exports){
 /**
  * @author huwb / http://huwbowles.com/
  *
@@ -15975,7 +16210,7 @@ THREE.ShaderGodRays = {
 
 };
 
-},{}],43:[function(_dereq_,module,exports){
+},{}],44:[function(_dereq_,module,exports){
 // three.js - http://github.com/mrdoob/three.js
 
 !function(){
@@ -16691,7 +16926,7 @@ fragmentShader:"uniform vec3 color;\nuniform sampler2D map;\nuniform float opaci
 
 module.exports = THREE
 }()
-},{}],44:[function(_dereq_,module,exports){
+},{}],45:[function(_dereq_,module,exports){
 module.exports = function( Gibber, Graphics ) {
   "use strict"
   var $ = Gibber.dollar
@@ -17211,7 +17446,7 @@ module.exports = function( Gibber, Graphics ) {
   
   return TwoD
 }
-},{}],45:[function(_dereq_,module,exports){
+},{}],46:[function(_dereq_,module,exports){
 module.exports = function( Gibber, Graphics ) {
   "use strict"
   
@@ -17359,7 +17594,7 @@ module.exports = function( Gibber, Graphics ) {
   
   return ThreeD
 }
-},{}],46:[function(_dereq_,module,exports){
+},{}],47:[function(_dereq_,module,exports){
 module.exports = function( Gibber, Graphics, THREE ){ 
 
 "use strict"
@@ -17798,7 +18033,7 @@ return Geometry;
 
 }
 
-},{}],47:[function(_dereq_,module,exports){
+},{}],48:[function(_dereq_,module,exports){
 module.exports = function( Gibber, Graphics ) {
 
 "use strict"
@@ -18021,7 +18256,7 @@ return Shaders
 //$.extend( window, Gibber.Graphics.Geometry )
 
 }
-},{}],48:[function(_dereq_,module,exports){
+},{}],49:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
 
 "use strict"
@@ -18334,7 +18569,7 @@ Graphics.Video = _dereq_( './video' )( Gibber, Graphics )
 return Graphics; 
 
 }
-},{"../external/three/postprocessing/CopyShader":28,"../external/three/postprocessing/DotScreenPass":29,"../external/three/postprocessing/EffectComposer":30,"../external/three/postprocessing/FilmPass":31,"../external/three/postprocessing/MaskPass":32,"../external/three/postprocessing/RenderPass":33,"../external/three/postprocessing/ShaderPass":34,"../external/three/postprocessing/shaders/BleachBypassShader":35,"../external/three/postprocessing/shaders/ColorifyShader":36,"../external/three/postprocessing/shaders/DotScreenShader":37,"../external/three/postprocessing/shaders/EdgeShader":38,"../external/three/postprocessing/shaders/FilmShader":39,"../external/three/postprocessing/shaders/FocusShader":40,"../external/three/postprocessing/shaders/KaleidoShader":41,"../external/three/postprocessing/shaders/ShaderGodRays":42,"../external/three/three.min":43,"./2d":44,"./3d":45,"./geometry":46,"./gibber_shaders":47,"./postprocessing":49,"./shader":50,"./video":51,"color":24}],49:[function(_dereq_,module,exports){
+},{"../external/three/postprocessing/CopyShader":29,"../external/three/postprocessing/DotScreenPass":30,"../external/three/postprocessing/EffectComposer":31,"../external/three/postprocessing/FilmPass":32,"../external/three/postprocessing/MaskPass":33,"../external/three/postprocessing/RenderPass":34,"../external/three/postprocessing/ShaderPass":35,"../external/three/postprocessing/shaders/BleachBypassShader":36,"../external/three/postprocessing/shaders/ColorifyShader":37,"../external/three/postprocessing/shaders/DotScreenShader":38,"../external/three/postprocessing/shaders/EdgeShader":39,"../external/three/postprocessing/shaders/FilmShader":40,"../external/three/postprocessing/shaders/FocusShader":41,"../external/three/postprocessing/shaders/KaleidoShader":42,"../external/three/postprocessing/shaders/ShaderGodRays":43,"../external/three/three.min":44,"./2d":45,"./3d":46,"./geometry":47,"./gibber_shaders":48,"./postprocessing":50,"./shader":51,"./video":52,"color":25}],50:[function(_dereq_,module,exports){
 module.exports = function( Gibber, Graphics ) {
 
 "use strict"
@@ -18961,7 +19196,7 @@ return PP
 
 }
 
-},{}],50:[function(_dereq_,module,exports){
+},{}],51:[function(_dereq_,module,exports){
 module.exports = function( Gibber, Graphics ) {
   var GG = Gibber.Graphics
 	
@@ -19186,7 +19421,7 @@ module.exports = function( Gibber, Graphics ) {
     //   return null
     // } 
 }
-},{}],51:[function(_dereq_,module,exports){
+},{}],52:[function(_dereq_,module,exports){
 /*
 a = Video()
 
@@ -19272,7 +19507,7 @@ module.exports = function( Gibber, Graphics ) {
   
   return Video 
 }
-},{}],52:[function(_dereq_,module,exports){
+},{}],53:[function(_dereq_,module,exports){
 /**#Interface
 A singleton object holding all widget constructors and a couple of other methods / properties. It is automatically created as soon as interface.js is loaded.
 **/
@@ -22966,7 +23201,7 @@ Interface.defineChildProperties = function(widget, properties) {
 module.exports = Interface
 
 }()
-},{"jquery":53}],53:[function(_dereq_,module,exports){
+},{"jquery":54}],54:[function(_dereq_,module,exports){
 /*!
  * jQuery JavaScript Library v2.1.1
  * http://jquery.com/
@@ -32158,7 +32393,7 @@ return jQuery;
 
 }));
 
-},{}],54:[function(_dereq_,module,exports){
+},{}],55:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
 
 var Interface = Gibber.Interface
@@ -32310,7 +32545,7 @@ var Autogui = {
 return Autogui
 
 }
-},{}],55:[function(_dereq_,module,exports){
+},{}],56:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   console.log( "GIBBER", Gibber )
   
@@ -33060,7 +33295,7 @@ module.exports = function( Gibber ) {
   return I
 }
 
-},{"./autogui":54,"./mouse.js":56,"interface.js":52}],56:[function(_dereq_,module,exports){
+},{"./autogui":55,"./mouse.js":57,"interface.js":53}],57:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   "use strict"
   
@@ -33243,7 +33478,7 @@ module.exports = function( Gibber ) {
     
     return _m
 }
-},{}],57:[function(_dereq_,module,exports){
+},{}],58:[function(_dereq_,module,exports){
 !function() {
 
 var Gibber = _dereq_( 'gibber.core.lib' )
@@ -33254,6 +33489,6 @@ Gibber.Interface = _dereq_( 'gibber.interface.lib' )( Gibber )
 module.exports = Gibber
 
 }()
-},{"gibber.audio.lib":4,"gibber.core.lib":21,"gibber.graphics.lib":48,"gibber.interface.lib":55}]},{},[57])
-(57)
+},{"gibber.audio.lib":4,"gibber.core.lib":21,"gibber.graphics.lib":49,"gibber.interface.lib":56}]},{},[58])
+(58)
 });
