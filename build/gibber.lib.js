@@ -10515,7 +10515,7 @@ module.exports = function( Gibber ) {
         var durationsPattern = Gibber.construct( Gibber.Pattern, obj.durations )
         
         if( obj.durations.randomFlag ) {
-          durationsPattern.filters.push( function() { return [ durationsPattern.values[ rndi(0, durationsPattern.values.length - 1) ], 1 ] } )
+          durationsPattern.filters.push( function() { return [ durationsPattern.values[ Gibber.Utilities.rndi(0, durationsPattern.values.length - 1) ], 1 ] } )
           for( var i = 0; i < obj.durations.randomArgs.length; i+=2 ) {
             durationsPattern.repeat( obj.durations.randomArgs[ i ], obj.durations.randomArgs[ i + 1 ] )
           }
@@ -10542,7 +10542,7 @@ module.exports = function( Gibber ) {
             }
           
             if( arg[ key ].randomFlag ) {
-              valuesPattern.filters.push( function() { return [ valuesPattern.values[ rndi(0, valuesPattern.values.length - 1) ], 1 ] } )
+              valuesPattern.filters.push( function() { return [ valuesPattern.values[ Gibber.Utilities.rndi(0, valuesPattern.values.length - 1) ], 1 ] } )
               for( var i = 0; i < arg[ key ].randomArgs.length; i+=2 ) {
                 valuesPattern.repeat( arg[ key ].randomArgs[ i ], arg[ key ].randomArgs[ i + 1 ] )
               }
@@ -10866,7 +10866,7 @@ module.exports = function( Gibber ) {
         obj.fx.ugen = obj
         
         if( name === 'Mono' ) {
-            obj.note = function( _frequency, amp ) {
+          obj.note = function( _frequency, amp ) {
             if(typeof amp !== 'undefined' && amp !== 0) this.amp = amp;
               
             if( amp !== 0 ) {
@@ -11958,7 +11958,7 @@ var Gibber = {
       
       var valuesPattern = args.values[0]
       if( v.randomFlag ) {
-        valuesPattern.filters.push( function() { return [ valuesPattern.values[ rndi(0, valuesPattern.values.length - 1) ], 1 ] } )
+        valuesPattern.filters.push( function() { return [ valuesPattern.values[ Gibber.Utilities.rndi(0, valuesPattern.values.length - 1) ], 1 ] } )
         for( var i = 0; i < v.randomArgs.length; i+=2 ) {
           valuesPattern.repeat( v.randomArgs[ i ], v.randomArgs[ i + 1 ] )
         }
@@ -11967,7 +11967,7 @@ var Gibber = {
       if( d !== null ) {
         var durationsPattern = args.durations[0]
         if( d.randomFlag ) {
-          durationsPattern.filters.push( function() { return [ durationsPattern.values[ rndi(0, durationsPattern.values.length - 1) ], 1 ] } )
+          durationsPattern.filters.push( function() { return [ durationsPattern.values[ Gibber.Utilities.rndi(0, durationsPattern.values.length - 1) ], 1 ] } )
           for( var i = 0; i < d.randomArgs.length; i+=2 ) {
             durationsPattern.repeat( d.randomArgs[ i ], d.randomArgs[ i + 1 ] )
           }
