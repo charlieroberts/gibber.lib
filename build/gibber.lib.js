@@ -2321,12 +2321,19 @@ Gibberish.Line = function(start, end, time, loops) {
       this.time = time
       
       incr = (end - out) / time
-    }
+      console.log( "RETRIG INCREMENT", incr )
+    },
+    
+    getPhase: function() { return phase },
+    getIncr: function() { return incr },
+    getOut: function() { return out }
 	};
   
 	var phase = 0,
 	    incr = (end - start) / time,
       out
+  
+  console.log("INCREMENT", incr, end, start, time )
   
 	this.callback = function(start, end, time, loops) {
 		out = phase < time ? start + ( phase++ * incr) : end;
@@ -6613,7 +6620,7 @@ Gibberish.PolySeq = function() {
               if( that.chose ) that.chose( 'durations', idx )
             }else{
               var next = typeof seq.durations === 'function' ? seq.durations() : seq.durations;
-                            
+              
               newNextTime = typeof next === 'function' ? next() : next;
             }
         
@@ -8383,12 +8390,12 @@ var Clock = {
   time : function(v) {
     var timeInSamples, beat;
     
-    if( v < this.maxMeasures ) {
+
+    if( v < Clock.maxMeasures ) {
       timeInSamples = Clock.beats( v * Clock.signature.lower )
     }else{
       timeInSamples = v
     }
-        
     return timeInSamples
   },
   
@@ -8428,7 +8435,7 @@ module.exports = function( Gibber ) {
   var Percussion = { Presets:{} }, 
       Gibberish = _dereq_( 'gibberish-dsp' ),
       $ = Gibber.dollar,
-      Clock = _dereq_('./clock')( Gibber ),
+      Clock = Gibber.Clock,
       curves = Gibber.outputCurves,
       LINEAR = curves.LINEAR,
       LOGARITHMIC = curves.LOGARITHMIC, 
@@ -9115,14 +9122,14 @@ module.exports = function( Gibber ) {
   return Percussion
   
 }
-},{"./clock":9,"gibberish-dsp":1}],11:[function(_dereq_,module,exports){
+},{"gibberish-dsp":1}],11:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   "use strict"
   
   var Envelopes = {},
       Gibberish = _dereq_( 'gibberish-dsp' ),
       $ = Gibber.dollar,
-      Clock = _dereq_('./clock')( Gibber ),
+      Clock = Gibber.Clock,
       curves = Gibber.outputCurves,
       LINEAR = curves.LINEAR,
       LOGARITHMIC = curves.LOGARITHMIC,
@@ -9195,7 +9202,6 @@ module.exports = function( Gibber ) {
         var args = Array.prototype.slice.call(arguments, 0),
             obj
         
-        //obj = Gibber.construct( Gibberish[ type ], obj )
         if( typeof args[0] !== 'object' ) {
           obj = new Gibberish[ type ]( args[0], args[1], Clock.time( args[2] ), args[3] )
         }else{
@@ -9224,7 +9230,7 @@ module.exports = function( Gibber ) {
 
 }
 
-},{"./clock":9,"gibberish-dsp":1}],12:[function(_dereq_,module,exports){
+},{"gibberish-dsp":1}],12:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   "use strict"
   
