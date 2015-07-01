@@ -19,7 +19,6 @@ gulp.task( 'client', function(){
 });
 
 gulp.task( 'p5', ['client'], function() {
-  console.log("P5")
   var out = gulp.src( './build/gibber.lib.js'  )
     .pipe( gulp.dest('/www/p5.gibber.js/node_modules/gibber.lib/build/') )
     .pipe( buffer() )

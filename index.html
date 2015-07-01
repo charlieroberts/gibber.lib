@@ -19,6 +19,10 @@ b = TorusKnot({ scale:2 }).spin(.001)
 c = Dots()
 c.scale = Master.Out
 
+d = Kick().note.seq(55,1/4)
+
+e = Synth('rhodes').chord.seq( Rndi(0,8,3), 1 )
+
 </script>
 
 </html>

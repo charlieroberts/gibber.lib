@@ -66,7 +66,7 @@ var Gibberish = {
   callbackObjects   : [],        // ugen function callbacks used in main audio callback
   analysisCallbackArgs    : [],
   analysisCallbackObjects : [],
-  
+  onBlock: null,
 /**###Gibberish.createCallback : method
 Perform codegen on all dirty ugens and re-create the audio callback. This method is called automatically in the default Gibberish sample loop whenever Gibberish.isDirty is true.
 **/
@@ -155,7 +155,9 @@ param **Audio Event** : Object. The HTML5 audio event object.
         objs = me.callbackObjects.slice(0),
         callbackArgs, callbackBody, _callback, val
 
-        objs.unshift(0)
+    if( me.onBlock !== null ) me.onBlock( me.context )
+    
+    objs.unshift(0)
         
 		for(var i = 0, _bl = e.outputBuffer.length; i < _bl; i++){
       
@@ -1364,7 +1366,8 @@ param **amp** Number. The amplitude to be used to calculate output.
     //   }
     //   //console.log( "FLIP", sign, signHistory, count, sync )
     // }
-    if( sign !== 0 ) signHistory = sign
+    // 
+    // if( sign !== 0 ) signHistory = sign
     
     return ( val1 + ( frac * (val2 - val1) ) ) * amp;
   }
@@ -2335,6 +2338,7 @@ Gibberish.Line = function(start, end, time, loops) {
   //console.log("INCREMENT", incr, end, start, time )
   
 	this.callback = function(start, end, time, loops) {
+    var incr = (end - start) / time
 		out = phase < time ? start + ( phase++ * incr) : end;
 				
 		phase = (out >= end && loops) ? 0 : phase;
@@ -2342,12 +2346,210 @@ Gibberish.Line = function(start, end, time, loops) {
 		return out;
 	};
   
+  this.setPhase = function(v) { phase = v; }
+  
   Gibberish.extend(this, that);
+  
   this.init();
 
   return this;
 };
 Gibberish.Line.prototype = Gibberish._envelope;
+
+Gibberish.Ease = function( start, end, time, easein, loops ) {
+  var sqrt = Math.sqrt, out = 0, phase = 0
+      
+  start = start || 0
+  end = end || 1
+  time = time || Gibberish.context.sampleRate
+  loops = loops || false
+  easein = typeof easein === 'undefined' ? 1 : easein
+  
+	var that = { 
+		name:		'ease',
+    properties : {},
+    retrigger: function( end, time ) {
+      phase = 0;
+      this.start = out
+      this.end = end
+      this.time = time      
+    },
+    
+    getPhase: function() { return phase },
+    getOut: function() { return out }
+	};
+  
+	this.callback = function() {
+    var x = phase++ / time,
+        y = easein ? 1 - sqrt( 1 - x * x ) : sqrt( 1 - ((1-x) * (1-x)) )
+    
+    out = phase < time ? start + ( y * ( end - start ) ) : end
+    
+		//out = phase < time ? start + ( phase++ * incr) : end;
+				
+		phase = (out >= end && loops) ? 0 : phase;
+		
+		return out;
+	};
+  
+  this.setPhase = function(v) { phase = v; }
+  this.setEase = function(v) {
+    easein = v
+  }
+  
+  Gibberish.extend(this, that);
+  
+  this.init();
+
+  return this;
+};
+Gibberish.Ease.prototype = Gibberish._envelope;
+
+// quadratic bezier
+// adapted from http://www.flong.com/texts/code/shapers_bez/
+Gibberish.Curve = function( start, end, time, a, b, fadeIn, loops ) {
+  var sqrt = Math.sqrt, 
+      out = 0,
+      phase = 0
+      
+      console.log("FDAE IN ", fadeIn )
+  start = start || 0
+  end = end || 1
+  time = time || Gibberish.context.sampleRate
+  a = a || .940
+  b = b || .260
+  loops = loops || false
+  fadeIn = typeof fadeIn === 'undefined' ? 1 : fadeIn
+  
+  console.log("FADE IN", fadeIn )
+  
+	var that = { 
+		name:		'curve',
+
+    properties : {},
+    
+    retrigger: function( end, time ) {
+      phase = 0;
+      this.start = out
+      this.end = end
+      this.time = time
+      
+      incr = (end - out) / time
+    },
+    
+    getPhase: function() { return phase },
+    getOut: function() { return out }
+	};
+  
+	this.callback = function() {
+    var x = phase++ / time,
+        om2a = 1 - 2 * a,
+        t = ( sqrt( a*a + om2a*x ) - a ) / om2a,
+        y = (1-2*b) * (t*t) + (2*b) * t
+    
+    out = phase < time ? start + ( y * ( end - start ) ) : end
+    
+    if( !fadeIn ) out =  1 - out
+    
+		//out = phase < time ? start + ( phase++ * incr) : end;
+				
+		phase = (out >= end && loops) ? 0 : phase;
+		
+		return out;
+	};
+  
+  this.setPhase = function(v) { phase = v; }
+  
+  Gibberish.extend(this, that);
+  
+  this.init();
+
+  return this;
+};
+Gibberish.Curve.prototype = Gibberish._envelope;
+
+Gibberish.Lines = function( values, times, loops ) {
+  var out = values[0],
+      phase = 0,
+      valuesPhase = 1,
+      timesPhase = 0,
+      targetValue = 0,
+      targetTime = 0,
+      end = false,
+      incr
+  
+  
+  if( typeof values === 'undefined' ) values = [ 0,1 ]
+  if( typeof times  === 'undefined' ) times  = [ 44100 ]  
+    
+  targetValue = values[ valuesPhase ]
+  targetTime  = times[ 0 ]
+  
+  incr = ( targetValue - values[0] ) / targetTime
+  //console.log( "current", out, "target", targetValue, "incr", incr )
+  
+  loops = loops || false
+  
+	var that = { 
+		name:		'lines',
+
+    properties : {},
+    
+    retrigger: function() {
+      phase = 0
+      out = values[0]
+      targetTime = times[ 0 ]
+      targetValue = values[ 1 ]
+      valuesPhase = 1
+      timesPhase = 0
+      incr = ( targetValue - out ) / targetTime
+      end = false
+    },
+    
+    getPhase: function() { return phase },
+    getOut:   function() { return out }
+	};
+  
+  that.run = that.retrigger
+  
+	this.callback = function() {
+    if( phase >= targetTime && !end ) {
+      if( valuesPhase < values.length - 1 ) {
+        var timeStep = times[ ++timesPhase % times.length ]
+        targetTime = phase + timeStep
+        targetValue = values[ ++valuesPhase % values.length ]
+        incr = ( targetValue - out ) / timeStep        
+      }else{
+        if( !loops ) {
+          end = true
+          out = values[ values.length - 1 ]
+        }else{
+          phase = 0
+          out = values[0]
+          targetTime = times[ 0 ]
+          targetValue = values[ 1 ]
+          valuesPhase = 1
+          timesPhase = 0
+          incr = ( targetValue - out ) / targetTime
+        }
+      }
+    }else if( !end ) {
+      out += incr
+      phase++
+    }
+		
+		return out;
+	};
+  
+  this.setPhase = function(v) { phase = v; }
+  
+  Gibberish.extend(this, that);
+  
+  this.init();
+
+  return this;
+};
+Gibberish.Lines.prototype = Gibberish._envelope;
 
 Gibberish.AD = function(_attack, _decay) {
   var phase = 0,
@@ -2623,6 +2825,8 @@ Gibberish.Follow = function() {
     mult : 1,
     useAbsoluteValue:true // for amplitude following, false for other values
   };
+  
+  this.storage = [];
     
   var abs = Math.abs,
       history = [0],
@@ -2655,11 +2859,13 @@ Gibberish.Follow = function() {
   
   var oldBufferSize = this.__lookupSetter__( 'bufferSize' ),
       bs = this.bufferSize
-      
+  
   Object.defineProperty( this, 'bufferSize', {
     get: function() { return bs },
     set: function(v) { bs = v; sum = 0; history = [0]; index = 0; }
   })
+  
+  this.getStorage = function() { return this.storage; }
 };
 Gibberish.Follow.prototype = Gibberish._analysis;
 
@@ -2882,21 +3088,22 @@ Gibberish.Delay = function() {
   
   Gibberish.extend(this, {
   	name:"delay",
-  	properties:{ input:0, time: 22050, feedback: .5, wet:1, dry:1 },
+  	properties:{ input:0, time: 22050, feedback: .5, wet:1, dry:1, rate:1 },
 				
-  	callback : function(sample, time, feedback, wet, dry) {
+  	callback : function(sample, time, feedback, wet, dry, rate ) {
       var channels = typeof sample === 'number' ? 1 : 2;
       
   		var _phase = phase++ % 88200;
+      time = time / rate;
+  		var delayPos = (_phase + ( time | 0 )) % 88200;
       
-  		var delayPos = (_phase + (time | 0)) % 88200;
       if(channels === 1) {
-  			buffers[0][delayPos] =  ( sample + buffers[0][_phase] ) * feedback;
+  			buffers[0][delayPos] =  sample + (buffers[0][_phase] ) * feedback;
         sample = (sample * dry) + (buffers[0][_phase] * wet);
       }else{
-  			buffers[0][delayPos] =  (sample[0] + buffers[0][_phase]) * feedback;
+  			buffers[0][delayPos] =  sample[0] + buffers[0][_phase] * feedback;
         sample[0] = (sample[0] * dry) + (buffers[0][_phase] * wet);
-  			buffers[1][delayPos] =  (sample[1] + buffers[1][_phase]) * feedback;
+  			buffers[1][delayPos] =  sample[1] + buffers[1][_phase] * feedback;
         sample[1] = (sample[1] * dry) + (buffers[1][_phase] * wet);
       }
       
@@ -4191,7 +4398,9 @@ Gibberish.Granulator = function(properties) {
       _out        = [0,0],
       rndf        = Gibberish.rndf,
       numberOfGrains = properties.numberOfGrains || 20;
-      
+  
+      console.log( "NUMBER OF GRAINS", numberOfGrains )
+  
 	Gibberish.extend(this, { 
 		name:		        "granulator",
 		bufferLength:   88200,
@@ -4274,6 +4483,8 @@ Gibberish.Granulator = function(properties) {
   .init()
   .processProperties(arguments);
   
+  
+  
 	for(var i = 0; i < numberOfGrains; i++) {
 		grains[i] = {
 			pos : self.position + Gibberish.rndf(self.positionMin, self.positionMax),
@@ -4283,7 +4494,11 @@ Gibberish.Granulator = function(properties) {
 		grains[i].end = grains[i].pos + self.grainSize;
 		grains[i].fadeAmount = grains[i]._speed * (self.fade * self.grainSize);
 		grains[i].pan = Gibberish.rndf(self.spread * -1, self.spread);
+    
+    console.log( "GRAIN", i, "POS", grains[i].pos, "SPEED", grains[i]._speed )
 	}
+  
+  this.grains = grains
 			
 	/*if(typeof properties.input !== "undefined") { 
 			this.shouldWrite = true;
@@ -5379,7 +5594,6 @@ param **amp** Number. Optional. The volume to use.
         
         if( __pitch > 0 ) { //|| typeof __pitch === 'object' || typeof this.pitch === 'function' ) {
           phase = this.start;
-          //console.log("PHASE :: ", phase, this.start )
 				}else{
           phase = this.end;
 				}
@@ -5518,6 +5732,7 @@ _pitch, amp, isRecording, isPlaying, input, length, start, end, loops, pan
     
     console.log("now loading sample", self.file )
     xhr.onerror = function( e ) { console.error( "Sampler file loading error", e )}
+    
     function initSound( arrayBuffer ) {
       Gibberish.context.decodeAudioData(arrayBuffer, function(_buffer) {
         buffer = _buffer.getChannelData(0)
@@ -5694,7 +5909,7 @@ param **amp** : Optional. Float. The volume of the note, usually between 0..1. T
   	},
 	});
   
-	var waveform = this.waveform;
+	var waveform = waveform1 = waveform2 = waveform3 = this.waveform;
 	Object.defineProperty(this, "waveform", {
 		get: function() { return waveform; },
 		set: function(value) {
@@ -5707,6 +5922,22 @@ param **amp** : Optional. Float. The volume of the note, usually between 0..1. T
 			}
 		},
 	});
+  
+  Object.defineProperties( this, {
+    waveform1: {
+      get: function() { return waveform1 },
+      set: function(v) { waveform1 = v; osc1 = new Gibberish[ v ]().callback; }
+    },
+    waveform2: {
+      get: function() { return waveform2 },
+      set: function(v) { waveform2 = v; osc2 = new Gibberish[ v ]().callback; }
+    },
+    waveform3: {
+      get: function() { return waveform3 },
+      set: function(v) { waveform3 = v; osc3 = new Gibberish[ v ]().callback; }
+    },
+  })
+  
   
 	var _envelope = new Gibberish.AD(this.attack, this.decay),
       envstate  = _envelope.getState,
@@ -6551,6 +6782,8 @@ Gibberish.PolySeq = function() {
     autofire      : [],
     name          : 'polyseq',
     getPhase      : function() { return phase },
+    setPhase      : function(v) { phase = v },
+    adjustPhase   : function(v) { phase += v },
     timeModifier  : null,
     add           : function( seq ) {
       seq.valuesIndex = seq.durationsIndex = 0
@@ -6804,7 +7037,8 @@ function createInput() {
 	    Gibberish.mediaStreamSource.connect( Gibberish.node );
 			_hasInput = true;
 		},
-    function() { 
+    function( e ) { 
+      console.log( e )
       console.log( 'error opening audio input')
     }
 	)
@@ -7047,6 +7281,100 @@ Gibberish.Tom = function() {
 }
 Gibberish.Tom.prototype = Gibberish._oscillator;
 
+Gibberish.Clap = function() {
+  var _bpf = new Gibberish.Biquad(),
+      bpf  = _bpf.callback,
+      _bpf2 = new Gibberish.Biquad(),
+      bpf2 = _bpf2.callback,
+      _bpf3 = new Gibberish.Biquad(),
+      bpf3 = _bpf3.callback,      
+      _eg = new Gibberish.ExponentialDecay(),
+      eg  = _eg.callback,
+      _eg2 = new Gibberish.ExponentialDecay(),
+      eg2 = _eg2.callback,
+      _ad  = new Gibberish.Line(),
+      ad = _ad.callback,
+      _lfo = new Gibberish.Saw(),
+      lfo = _lfo.callback,
+      rnd = Math.random,
+      cutoff = 1000,
+      rez = 2.5,
+      env1K = .025,
+      env2K = .9,
+      env1Dur = 30 * 44.1,
+      env2Dur = 660,
+      freq = 100
+      
+  _bpf.mode = _bpf2.mode = 'BP'
+  _bpf3.mode = 'BP'
+  _bpf3.cutoff = 2400
+  
+  _bpf.cutoff = _bpf2.cutoff = 1000
+  _bpf.Q = 2
+  _bpf2.Q = 1
+      
+  Gibberish.extend(this, {
+  	name:		"clap",
+    properties:	{ amp:.5, sr:Gibberish.context.sampleRate },
+	
+  	callback: function( amp, sr ) {
+  		var out = 0, noiseBPF, noise, env;
+			      
+      noiseBPF = rnd() * 4 - 2 //* 4 - 2
+		  noiseBPF = noiseBPF > 0 ? noiseBPF : 0;
+      
+      noise = rnd() * 4 - 2 //* 16 - 8
+		  noise = noise > 0 ? noise : 0;
+      
+  		out = bpf2( bpf( noiseBPF ) ) //, cutoff, rez, 2, sr ); // mode 2 is bp
+      
+      out *= eg2( env2K, env2Dur )
+      
+      noise = bpf3( lfo( freq, noise ) * eg( env1K, env1Dur ) )//ad( 1,0, env1Dur, false ) );
+      
+      out += noise;
+  		out *= amp;
+		
+  		return out;
+  	},
+
+  	note : function( amp ) {
+  		if(typeof amp === 'number') this.amp = amp;
+		  
+      _eg2.trigger();
+      _eg.trigger();
+      _ad.setPhase(0);
+      _lfo.setPhase(0);
+
+  	},
+  })
+  .init()
+  .oscillatorInit();
+  
+  // _eg.trigger(1)
+  // _eg2.trigger(1)
+  
+  this.getBPF = function() { return _bpf; }
+  this.getBPF2 = function() { return _bpf2; }
+  this.getBPF3 = function() { return _bpf3; }
+  this.getLine = function() { return _ad; }
+  
+  this.setEnvK = function( k1,k2,d1,d2 ) {
+    env1K = k1
+    if( k2 ) env2K = k2
+    if( d1 ) env1Dur = d1
+    if( d2 ) env2Dur = d2    
+  }
+  
+  this.setFreq = function(v) { freq = v }
+  
+  this.setRez = function(v) { rez = v; }
+  this.setCutoff = function(v) { cutoff = v; }  
+  
+  this.processProperties(arguments);
+}
+Gibberish.Clap.prototype = Gibberish._oscillator;
+
 // http://www.soundonsound.com/sos/Sep02/articles/synthsecrets09.asp
 Gibberish.Cowbell = function() {
   var _s1 = new Gibberish.Square(),
@@ -7231,11 +7559,11 @@ Gibberish.Hat.prototype = Gibberish._oscillator;
 /* IMPORTANT README
 *
 * This class depends on having access to a folder of soundfonts that have been converted to
-* binary string representations. More specifically, soundfonts designed to work with MIDI.js:
+* binary string representations. More specifically, soundfonts designed to work with GenMIDI.js:
 *
 * https://github.com/gleitz/midi-js-soundfonts
 *
-* At some point it would be nice to make another soundfont system, as MIDI.js does not support
+* At some point it would be nice to make another soundfont system, as GenMIDI.js does not support
 * defining loop points.
 *
 * By default soundfonts should be found in a folder named 'resources/soundfonts' one level above
@@ -7251,19 +7579,18 @@ Gibberish.Hat.prototype = Gibberish._oscillator;
 
 (function() {
   var cents = function(base, _cents) { return base * Math.pow(2,_cents/1200) },
-      MIDI = { Soundfont: { instruments: {} } },
-      SF = MIDI.Soundfont
+      GenMIDI = { Soundfont: { instruments: {} } },
+      SF = GenMIDI.Soundfont
   
-  // TODO: GET RID OF THIS GLOBAL!!!! It's unfortunately in there because we're using soundfonts meant for MIDI.js
+  // TODO: GET RID OF THIS GLOBAL!!!! It's unfortunately in there because we're using soundfonts meant for GenMIDI.js
   if( typeof window === 'object' )
-    window.MIDI = MIDI
+    window.GenMIDI = GenMIDI
   else
-    global.MIDI = MIDI
+    global.GenMIDI = GenMIDI
   
   var getScript = function( scriptPath, handler ) {
     var oReq = new XMLHttpRequest();
-
-    // oReq.addEventListener("progress", updateProgress, false);
+    
     oReq.addEventListener("load", transferComplete, false);
     oReq.addEventListener("error", function(e){ console.log( "SF load error", e ) }, false);
 
@@ -7278,12 +7605,15 @@ Gibberish.Hat.prototype = Gibberish._oscillator;
         var sizeString = new String( "" + oEvent.total )
         sizeString = sizeString[0] + '.' + sizeString[1] + ' MB'
         size.innerHTML = sizeString
+        
+        console.log( percentComplete, "%" )
       } else {
         // Unable to compute progress information since the total size is unknown
       }
     }
 
     function transferComplete( evt ) {
+      console.log("COMPLETE", scriptPath)
       var script = document.createElement('script')
       script.innerHTML = evt.srcElement ? evt.srcElement.responseText : evt.target.responseText
       document.querySelector( 'head' ).appendChild( script )
@@ -7432,6 +7762,7 @@ Gibberish.Hat.prototype = Gibberish._oscillator;
     
     // if already loaded, or if passed a buffer to use...
     if( !SF.instruments[ this.instrumentFileName ] && typeof pathToResources !== 'object' ) {
+      console.log("DOWNLOADING SOUNDFONT")
       getScript( 'resources/soundfonts/' + this.instrumentFileName + '-mp3.js', decodeBuffers.bind( null, this ) )
     }else{
       if( typeof pathToResources === 'object' ) {
@@ -7474,7 +7805,6 @@ Gibberish.Vocoder = function() {
     amp:		  1,
 	  pan:		  0
   }
-  
 
   // filter band formula adapted from https://github.com/cwilso/Vocoder/blob/master/js/vocoder.js
 	var totalRangeInCents = 1200 * Math.log( endFreq / startFreq ) / Math.LN2,
@@ -7518,7 +7848,7 @@ Gibberish.Vocoder = function() {
 		}
     index = historyIndex
 	
-    output[0] = output[1] = out * amp * 16;
+    output[0] = output[1] = out * amp * 16; // look, ma... 16 IS MAGIC!!!
 
 		return output;
 	}
@@ -7685,8 +8015,360 @@ var freesound = module.exports = {
 
 }()
 },{}],3:[function(_dereq_,module,exports){
+(function () {
+
+    var freesound = function () {        
+        var authHeader = '';
+        var clientId = '';
+        var clientSecret = '';
+        var host = 'freesound.org';
+
+        var uris = {
+            base : 'https://'+host+'/apiv2',
+            textSearch : '/search/text/',
+            contentSearch: '/search/content/',
+            combinedSearch : '/sounds/search/combined/',
+            sound : '/sounds/<sound_id>/',
+            soundAnalysis : '/sounds/<sound_id>/analysis/',
+            similarSounds : '/sounds/<sound_id>/similar/',
+            comments : '/sounds/<sound_id>/comments/',
+            download : '/sounds/<sound_id>/download/',
+            upload : '/sounds/upload/',
+            describe : '/sounds/<sound_id>/describe/',
+            pending : '/sounds/pending_uploads/',
+            bookmark : '/sounds/<sound_id>/bookmark/',
+            rate : '/sounds/<sound_id>/rate/',
+            comment : '/sounds/<sound_id>/comment/',
+            authorize : '/oauth2/authorize/',
+            logout : '/api-auth/logout/',
+            logoutAuthorize : '/oauth2/logout_and_authorize/',
+            me : '/me/',
+            user : '/users/<username>/',
+            userSounds : '/users/<username>/sounds/',
+            userPacks : '/users/<username>/packs/',
+            userBookmarkCategories : '/users/<username>/bookmark_categories/',
+            userBookmarkCategorySounds : '/users/<username>/bookmark_categories/<category_id>/sounds/',
+            pack : '/packs/<pack_id>/',
+            packSounds : '/packs/<pack_id>/sounds/',
+            packDownload : '/packs/<pack_id>/download/'            
+        };
+        
+        var makeUri = function (uri, args){
+            for (var a in args) {uri = uri.replace(/<[\w_]+>/, args[a]);}
+            return uris.base+uri;
+        };
+
+        var makeRequest = function (uri, success, error, params, wrapper, method, data, content_type){
+            if(method===undefined) method='GET';
+            if(!error)error = function(e){console.log(e)};
+            params = params || {};
+            params['format'] = 'json';
+            //params['api_key'] = '4287f0bacdcc492a8fae27fc3b228aaf';
+            var fs = this;
+            var parse_response = function (response){
+                var data = eval("(" + response + ")");
+                success(wrapper?wrapper(data):data);
+            };                      
+            var paramStr = "";
+            for(var p in params){paramStr = paramStr+"&"+p+"="+params[p];}
+            if (paramStr){
+                uri = uri +"?"+ paramStr;
+            }
+            
+            if (typeof module !== 'undefined'){ // node.js
+                var http = _dereq_("http");
+                var options = {
+                    host: host,
+                    path: uri.substring(uri.indexOf("/",8),uri.length), // first '/' after 'http://'
+                    port: '80',
+                    method: method,
+                    headers: {'Authorization': authHeader},
+                    withCredentials:false,
+                };
+                console.log( options )
+                var req = http.request(options,function(res){
+                    //res.setEncoding('utf8');            
+                    res.on('data', function (data){ 
+                        if([200,201,202].indexOf(res.statusCode)>=0)
+                            success(wrapper?wrapper(data):data);
+                        else   
+                            error(data);
+                    });                    
+                });                
+                req.on('error', error).end();
+            }
+            else{ // browser
+                var xhr;
+                try {xhr = new XMLHttpRequest();}
+                catch (e) {xhr = new ActiveXObject('Microsoft.XMLHTTP');}
+
+                xhr.onreadystatechange = function(){
+                    if (xhr.readyState === 4 && [200,201,202].indexOf(xhr.status)>=0){
+                        var data = eval("(" + xhr.responseText + ")");
+                        if(success) success(wrapper?wrapper(data):data);
+                    }
+                    else if (xhr.readyState === 4 && xhr.status !== 200){
+                        if(error) error(xhr.statusText);
+                    }
+                };
+                xhr.open(method, uri);
+                xhr.setRequestHeader('Authorization',authHeader);
+                if(content_type!==undefined)
+                    xhr.setRequestHeader('Content-Type',content_type);
+                xhr.send(data);
+            }
+    };
+    var checkOauth = function(){
+        if(authHeader.indexOf("Bearer")==-1)
+            throw("Oauth authentication required");
+    };
+        
+    var makeFD = function(obj,fd){
+        if(!fd)
+            fd = new FormData(); 
+        for (var prop in obj){
+            fd.append(prop,obj[prop])
+        }
+        return fd;
+    };
+    
+    var search = function(options, uri, success, error,wrapper){  
+        if(options.analysis_file){ 
+                makeRequest(makeUri(uri), success,error,null, wrapper, 'POST',makeFD(options));
+        }
+        else{
+                makeRequest(makeUri(uri), success,error,options, wrapper);
+        }    
+    };
+        
+    var Collection = function (jsonObject){
+        var nextOrPrev = function (which,success,error){
+            makeRequest(which,success,error,{}, Collection);
+        };        
+        jsonObject.nextPage = function (success,error){
+            nextOrPrev(jsonObject.next,success,error);
+        };
+        jsonObject.previousPage = function (success,error){
+            nextOrPrev(jsonObject.previous,success,error);
+        };
+        jsonObject.getItem = function (idx){
+            return jsonObject.results[idx];
+        }
+        
+        return jsonObject;
+    };  
+        
+    var SoundCollection = function(jsonObject){
+        var collection = Collection(jsonObject);
+        collection.getSound = function (idx){
+            return new SoundObject(collection.results[idx]);
+        };
+        return collection;
+    };
+    
+    var PackCollection = function(jsonObject){
+        var collection = Collection(jsonObject);
+        collection.getPack = function (idx){
+            return new PackObject(collection.results[idx]);
+        };   
+        return collection;
+    };
+        
+    var SoundObject = function (jsonObject){ 
+        jsonObject.getAnalysis = function(filter, success, error, showAll){
+            var params = {all: showAll?1:0};
+            makeRequest(makeUri(uris.soundAnalysis,[jsonObject.id,filter?filter:""]),success,error);
+        };
+
+        jsonObject.getSimilar = function (success, error, params){
+            makeRequest(makeUri(uris.similarSounds,[jsonObject.id]),success,error, params,SoundCollection);
+        };
+ 
+       jsonObject.getComments = function (success, error){
+            makeRequest(makeUri(uris.comments,[jsonObject.id]),success,error,{},Collection);
+       };
+
+       jsonObject.download = function (targetWindow){// can be window, new, or iframe
+            checkOauth();
+            var uri = makeUri(uris.download,[jsonObject.id]);
+            targetWindow.location = uri;
+       };
+       
+	jsonObject.comment = function (commentStr, success, error){
+            checkOauth();
+            var data = new FormData();
+            data.append('comment', comment);
+            var uri = makeUri(uris.comment,[jsonObject.id]);
+            makeRequest(uri, success, error, {}, null, 'POST', data);
+        };
+
+        jsonObject.rate = function (rating, success, error){
+            checkOauth();
+            var data = new FormData();
+            data.append('rating', rating);
+            var uri = makeUri(uris.rate,[jsonObject.id]);
+            makeRequest(uri, success, error, {}, null, 'POST', data);
+        };
+
+        jsonObject.bookmark = function (name, category,success, error){
+            checkOauth();
+            var data = new FormData();
+            data.append('name', name);
+            if(category)
+                data.append("category",category);
+            var uri = makeUri(uris.bookmark,[jsonObject.id]);            
+            makeRequest(uri, success, error, {}, null, 'POST', data);
+        };
+        
+        jsonObject.edit = function (description,success, error){
+            checkOauth();
+            var data = makeFD(description);
+            var uri = makeUri(uris.edit,[jsonObject.id]);
+            makeRequest(uri, success, error, {}, null, 'POST', data);
+        };        
+
+        return jsonObject;
+    };
+    var UserObject = function(jsonObject){
+        jsonObject.sounds = function (success, error, params){
+            var uri = makeUri(uris.userSounds,[jsonObject.username]);
+            makeRequest(uri, success, error,params,SoundCollection);            
+        };
+
+        jsonObject.packs = function (success, error){
+            var uri = makeUri(uris.userPacks,[jsonObject.username]);
+            makeRequest(uri, success, error,{},PackCollection);                    
+        };
+
+        jsonObject.bookmarkCategories = function (success, error){
+            var uri = makeUri(uris.userBookmarkCategories,[jsonObject.username]);
+            makeRequest(uri, success, error);                    
+        };
+
+        jsonObject.bookmarkCategorySounds = function (success, error,params){
+            var uri = makeUri(uris.userBookmarkCategorySounds,[jsonObject.username]);
+            makeRequest(uri, success, error,params);                    
+        };
+
+        return jsonObject;
+    };
+        
+    var PackObject = function(jsonObject){
+        jsonObject.sounds = function (success, error){
+            var uri = makeUri(uris.packSounds,[jsonObject.id]);
+            makeRequest(uri, success, error,{},SoundCollection);            
+        };
+        
+        jsonObject.download = function (targetWindow){// can be current or new window, or iframe
+            checkOauth();
+            var uri = makeUri(uris.packDownload,[jsonObject.id]);
+            targetWindow.location = uri;
+        };                
+        return jsonObject;
+    };
+                
+    return {
+            // authentication
+            setToken: function (token, type) {
+                authHeader = (type==='oauth' ? 'Bearer ':'Token ')+token;
+            },
+            setClientSecrets: function(id,secret){
+                clientId = id;
+                clientSecret = secret;
+            },
+
+            postAccessCode: function(code, success, error){
+                var post_url = uris.base+"/oauth2/access_token/"
+                var data = new FormData();
+                data.append('client_id',clientId);
+                data.append('client_secret',clientSecret);
+                data.append('code',code);
+                data.append('grant_type','authorization_code');
+                                
+                if (!success){
+                    success = function(result){
+                        setToken(result.access_token,'oauth');                        
+                    }
+                }
+                makeRequest(post_url, success, error, {}, null, 'POST', data);
+            },
+            textSearch: function(query, options, success, error){                
+                options = options || {};
+                options.query = query ? query : " ";
+                search(options,uris.textSearch,success,error,SoundCollection);
+            },                    
+            contentSearch: function(options, success, error){
+                if(!(options.target || options.analysis_file))
+                   throw("Missing target or analysis_file");
+                search(options,uris.contentSearch,success,error,SoundCollection);
+            },
+            combinedSearch:function(options, success, error){
+               if(!(options.target || options.analysis_file || options.query))
+                   throw("Missing query, target or analysis_file");
+                search(options,uris.contentSearch,success,error);
+            },
+            getSound: function(soundId,success, error){
+                makeRequest(makeUri(uris.sound, [soundId]), success,error,{}, SoundObject);
+            },
+
+            upload: function(audiofile,filename, description, success,error){
+                checkOauth();
+                var fd = new FormData();
+                fd.append('audiofile', audiofile,filename);                    
+                if(description){                    
+                    fd = makeFD(description,fd);
+                }
+                makeRequest(makeUri(uris.upload), success, error, {}, null, 'POST', fd);
+            },
+            describe: function(upload_filename , description, license, tags, success,error){
+                checkOauth();                
+                var fd = makeFD(description);
+                makeRequest(makeUri(uris.upload), success, error, {}, null, 'POST', fd);
+            },
+
+            getPendingSounds: function(success,error){
+                checkOauth();
+                makeRequest(makeUri(uris.pending), success,error,{});
+            },
+
+            // user resources
+            me: function(success,error){
+                checkOauth();
+                makeRequest(makeUri(uris.me), success,error);
+            },
+
+            getLoginURL: function(){
+                    if(clientId===undefined) throw "client_id was not set"
+                    var login_url = makeUri(uris.authorize);
+                    login_url += "?client_id="+clientId+"&response_type=code";
+                    return login_url;
+            },
+            getLogoutURL: function(){
+                var logout_url = makeUri(uris.logoutAuthorize);
+                logout_url += "?client_id="+clientId+"&response_type=code";
+                
+                return logout_url;
+            },
+
+            getUser: function(username, success,error){
+                makeRequest(makeUri(uris.user, [username]), success,error,{}, UserObject);
+            },
+        
+            getPack: function(packId,success,error){                
+                makeRequest(makeUri(uris.pack, [packId]), success,error,{}, PackObject);            
+            }        
+        }    
+    };
+
+    // compatible with CommonJS (node), AMD (requireJS) failing back to browser global 
+    // working with node requires web-audio-api module
+    if (typeof module !== 'undefined') {module.exports = freesound(); }
+    else if (typeof define === 'function' && typeof define.amd === 'object') { define("freesound", [], freesound); }
+    else {this.freesound = freesound(); }
+}());
+},{"http":74}],4:[function(_dereq_,module,exports){
 (function(){function t(t,e){return t=r[t],e=r[e],t.distance>e.distance?e.distance+12-t.distance:e.distance-t.distance}function e(t,e,i){for(;i>0;i--)t+=e;return t}function i(t,e){if("string"!=typeof t)return null;this.name=t,this.duration=e||4,this.accidental={value:0,sign:""};var i=t.match(/^([abcdefgh])(x|#|bb|b?)(-?\d*)/i);if(i&&t===i[0]&&0!==i[3].length)this.name=i[1].toLowerCase(),this.octave=parseFloat(i[3]),0!==i[2].length&&(this.accidental.sign=i[2].toLowerCase(),this.accidental.value=y[i[2]]);else{t=t.replace(/\u2032/g,"'").replace(/\u0375/g,",");var n=t.match(/^(,*)([abcdefgh])(x|#|bb|b?)([,\']*)$/i);if(!n||5!==n.length||t!==n[0])throw Error("Invalid note format");if(""===n[1]&&""===n[4])this.octave=n[2]===n[2].toLowerCase()?3:2;else if(""!==n[1]&&""===n[4]){if(n[2]===n[2].toLowerCase())throw Error("Invalid note format. Format must respect the Helmholtz notation.");this.octave=2-n[1].length}else{if(""!==n[1]||""===n[4])throw Error("Invalid note format");if(n[4].match(/^'+$/)){if(n[2]===n[2].toUpperCase())throw Error("Invalid note format. Format must respect the Helmholtz notation");this.octave=3+n[4].length}else{if(!n[4].match(/^,+$/))throw Error("Invalid characters after note name.");if(n[2]===n[2].toLowerCase())throw Error("Invalid note format. Format must respect the Helmholtz notation");this.octave=2-n[4].length}}this.name=n[2].toLowerCase(),0!==n[3].length&&(this.accidental.sign=n[3].toLowerCase(),this.accidental.value=y[n[3]])}}function n(t,e){if(!(t instanceof i))return null;e=e||"",this.name=t.name.toUpperCase()+t.accidental.sign+e,this.root=t,this.notes=[t],this.quality="major",this.type="major";var n,r,o,s,h,m=[],u=!1,c="quality",d=!1,p=!1,v=null;for(s=0,h=e.length;h>s;s++){for(n=e[s];" "===n||"("===n||")"===n;)n=e[++s];if(!n)break;if(r=n.charCodeAt(0),o=h>=s+3?e.substr(s,3):"","quality"===c)"M"===n||("maj"===o||916===r?(this.type="major",m.push("M7"),u=!0,(e[s+3]&&"7"===e[s+3]||916===r&&"7"===e[s+1])&&s++):"m"===n||"-"===n||"min"===o?this.quality=this.type="minor":111===r||176===r||"dim"===o?(this.quality="minor",this.type="diminished"):"+"===n||"aug"===o?(this.quality="major",this.type="augmented"):216===r||248===r?(this.quality="minor",this.type="diminished",m.push("m7"),u=!0):"sus"===o?(this.quality="sus",this.type=e[s+3]&&"2"===e[s+3]?"sus2":"sus4"):"5"===n?(this.quality="power",this.type="power"):s-=1),o in l&&(s+=2),c="";else if("#"===n)d=!0;else if("b"===n)p=!0;else if("5"===n)d?(v="A5","major"===this.quality&&(this.type="augmented")):p&&(v="d5","minor"===this.quality&&(this.type="diminished")),p=d=!1;else if("6"===n)m.push("M6"),p=d=!1;else if("7"===n)"diminished"===this.type?m.push("d7"):m.push("m7"),u=!0,p=d=!1;else if("9"===n)u||m.push("m7"),p?m.push("m9"):d?m.push("A9"):m.push("M9"),p=d=!1;else{if("1"!==n)throw Error("Unexpected character: '"+n+"' in chord name");n=e[++s],"1"===n?p?m.push("d11"):d?m.push("A11"):m.push("P11"):"3"===n&&(p?m.push("m13"):d?m.push("A13"):m.push("M13")),p=d=!1}}for(var y=0,g=f[this.type].length;g>y;y++)"5"===f[this.type][y][1]&&v?this.notes.push(a.interval(this.root,v)):this.notes.push(a.interval(this.root,f[this.type][y]));for(y=0,g=m.length;g>y;y++)this.notes.push(a.interval(this.root,m[y]))}var a={},r={c:{name:"c",distance:0,index:0},d:{name:"d",distance:2,index:1},e:{name:"e",distance:4,index:2},f:{name:"f",distance:5,index:3},g:{name:"g",distance:7,index:4},a:{name:"a",distance:9,index:5},b:{name:"b",distance:11,index:6},h:{name:"h",distance:11,index:6}},o=["c","d","e","f","g","a","b"],s={.25:"longa",.5:"breve",1:"whole",2:"half",4:"quarter",8:"eighth",16:"sixteenth",32:"thirty-second",64:"sixty-fourth",128:"hundred-twenty-eighth"},h=[{name:"unison",quality:"perfect",size:0},{name:"second",quality:"minor",size:1},{name:"third",quality:"minor",size:3},{name:"fourth",quality:"perfect",size:5},{name:"fifth",quality:"perfect",size:7},{name:"sixth",quality:"minor",size:8},{name:"seventh",quality:"minor",size:10},{name:"octave",quality:"perfect",size:12},{name:"ninth",quality:"minor",size:13},{name:"tenth",quality:"minor",size:15},{name:"eleventh",quality:"perfect",size:17},{name:"twelfth",quality:"perfect",size:19},{name:"thirteenth",quality:"minor",size:20},{name:"fourteenth",quality:"minor",size:22},{name:"fifteenth",quality:"perfect",size:24}],m={unison:0,second:1,third:2,fourth:3,fifth:4,sixth:5,seventh:6,octave:7,ninth:8,tenth:9,eleventh:10,twelfth:11,thirteenth:12,fourteenth:13,fifteenth:14},l={P:"perfect",M:"major",m:"minor",A:"augmented",d:"diminished",perf:"perfect",maj:"major",min:"minor",aug:"augmented",dim:"diminished"},u={perfect:"P",major:"M",minor:"m",augmented:"A",diminished:"d"},c={P:"P",M:"m",m:"M",A:"d",d:"A"},d={perfect:["diminished","perfect","augmented"],minor:["diminished","minor","major","augmented"]},f={major:["M3","P5"],minor:["m3","P5"],augmented:["M3","A5"],diminished:["m3","d5"],sus2:["M2","P5"],sus4:["P4","P5"],power:["P5"]},p={major:"M",minor:"m",augmented:"aug",diminished:"dim",power:"5"},v={"-2":"bb","-1":"b",0:"",1:"#",2:"x"},y={bb:-2,b:-1,"#":1,x:2};i.prototype={key:function(t){return t?7*(this.octave-1)+3+Math.ceil(r[this.name].distance/2):12*(this.octave-1)+4+r[this.name].distance+this.accidental.value},fq:function(t){return t=t||440,t*Math.pow(2,(this.key()-49)/12)},scale:function(t,e){return a.scale.list(this,t,e)},interval:function(t,e){return a.interval(this,t,e)},chord:function(t){return t=t||"major",t in p&&(t=p[t]),new n(this,t)},helmholtz:function(){var t,i=3>this.octave?this.name.toUpperCase():this.name.toLowerCase();return 2>=this.octave?(t=e("",",",2-this.octave),t+i+this.accidental.sign):(t=e("","'",this.octave-3),i+this.accidental.sign+t)},scientific:function(){return this.name.toUpperCase()+this.accidental.sign+("number"==typeof this.octave?this.octave:"")},enharmonics:function(){var t=[],e=this.key(),i=this.interval("m2","up"),n=this.interval("m2","down"),a=i.key()-i.accidental.value,r=n.key()-n.accidental.value,o=e-a;return 3>o&&o>-3&&(i.accidental={value:o,sign:v[o]},t.push(i)),o=e-r,3>o&&o>-3&&(n.accidental={value:o,sign:v[o]},t.push(n)),t},valueName:function(){return s[this.duration]},toString:function(t){return t="boolean"==typeof t?t:"number"==typeof this.octave?!1:!0,this.name.toLowerCase()+this.accidental.sign+(t?"":this.octave)}},n.prototype.dominant=function(t){return t=t||"",new n(this.root.interval("P5"),t)},n.prototype.subdominant=function(t){return t=t||"",new n(this.root.interval("P4"),t)},n.prototype.parallel=function(t){if(t=t||"","triad"!==this.chordType()||"diminished"===this.quality||"augmented"===this.quality)throw Error("Only major/minor triads have parallel chords");return"major"===this.quality?new n(this.root.interval("m3","down"),"m"):new n(this.root.interval("m3","up"))},n.prototype.chordType=function(){var t,e,i;if(2===this.notes.length)return"dyad";if(3===this.notes.length){e={unison:!1,third:!1,fifth:!1};for(var n=0,r=this.notes.length;r>n;n++)t=this.root.interval(this.notes[n]),i=h[parseFloat(a.interval.invert(t.simple)[1])-1],t.name in e?e[t.name]=!0:i.name in e&&(e[i.name]=!0);return e.unison&&e.third&&e.fifth?"triad":"trichord"}if(4===this.notes.length){e={unison:!1,third:!1,fifth:!1,seventh:!1};for(var n=0,r=this.notes.length;r>n;n++)t=this.root.interval(this.notes[n]),i=h[parseFloat(a.interval.invert(t.simple)[1])-1],t.name in e?e[t.name]=!0:i.name in e&&(e[i.name]=!0);if(e.unison&&e.third&&e.fifth&&e.seventh)return"tetrad"}return"unknown"},n.prototype.toString=function(){return this.name},a.note=function(t,e){return new i(t,e)},a.note.fromKey=function(t){var e=440*Math.pow(2,(t-49)/12);return a.frequency.note(e).note},a.chord=function(t){var e;if(e=t.match(/^([abcdefgh])(x|#|bb|b?)/i),e&&e[0])return new n(new i(e[0].toLowerCase()),t.substr(e[0].length));throw Error("Invalid Chord. Couldn't find note name")},a.frequency={note:function(t,e){e=e||440;var n,a,s,h,m,l,u;return n=Math.round(49+12*((Math.log(t)-Math.log(e))/Math.log(2))),u=e*Math.pow(2,(n-49)/12),l=1200*(Math.log(t/u)/Math.log(2)),a=Math.floor((n-4)/12),s=n-12*a-4,h=r[o[Math.round(s/2)]],m=h.name,s>h.distance?m+="#":h.distance>s&&(m+="b"),{note:new i(m+(a+1)),cents:l}}},a.interval=function(t,e,n){if("string"==typeof e){"down"===n&&(e=a.interval.invert(e));var r=l[e[0]],o=parseFloat(e.substr(1));if(!r||isNaN(o)||1>o)throw Error("Invalid string-interval format");return a.interval.from(t,{quality:r,interval:h[o-1].name},n)}if(e instanceof i&&t instanceof i)return a.interval.between(t,e);throw Error("Invalid parameters")},a.interval.from=function(e,n,a){n.direction=a||n.direction||"up";var s,l,u,c,f,p;if(f=m[n.interval],p=h[f],f>7&&(f-=7),f=r[e.name].index+f,f>o.length-1&&(f-=o.length),s=o[f],-1===d[p.quality].indexOf(n.quality)||-1===d[p.quality].indexOf(p.quality))throw Error("Invalid interval quality");return l=d[p.quality].indexOf(n.quality)-d[p.quality].indexOf(p.quality),u=p.size+l-t(e.name,s),e.octave&&(c=Math.floor((e.key()-e.accidental.value+t(e.name,s)-4)/12)+1+Math.floor(m[n.interval]/7)),u+=e.accidental.value,u>=11&&(u-=12),u>-3&&3>u&&(s+=v[u]),"down"===a&&c--,new i(s+(c||""))},a.interval.between=function(t,e){var i,n,a,o,s,m,l=t.key(),c=e.key();if(i=c-l,i>24||-25>i)throw Error("Too big interval. Highest interval is a augmented fifteenth (25 semitones)");return 0>i&&(o=t,t=e,e=o),a=r[e.name].index-r[t.name].index+7*(e.octave-t.octave),n=h[a],m=d[n.quality][Math.abs(i)-n.size+1],s=u[m]+(""+Number(a+1)),{name:n.name,quality:m,direction:i>0?"up":"down",simple:s}},a.interval.invert=function(t){if(2!==t.length&&3!==t.length)return!1;var e=c[t[0]],i=2===t.length?parseFloat(t[1]):parseFloat(t.substr(1));return i>8&&(i-=7),8!==i&&1!==i&&(i=9-i),e+(""+i)},a.scale={list:function(t,e,n){var r,o,s=[],h=[];if(!(t instanceof i))return!1;if("string"==typeof e&&(e=a.scale.scales[e],!e))return!1;for(s.push(t),n&&h.push(t.name+(t.accidental.sign||"")),r=0,o=e.length;o>r;r++)s.push(a.interval(t,e[r])),n&&h.push(s[r+1].name+(s[r+1].accidental.sign||""));return n?h:s},scales:{major:["M2","M3","P4","P5","M6","M7"],ionian:["M2","M3","P4","P5","M6","M7"],dorian:["M2","m3","P4","P5","M6","m7"],phrygian:["m2","m3","P4","P5","m6","m7"],lydian:["M2","M3","A4","P5","M6","M7"],mixolydian:["M2","M3","P4","P5","M6","m7"],minor:["M2","m3","P4","P5","m6","m7"],aeolian:["M2","m3","P4","P5","m6","m7"],locrian:["m2","m3","P4","d5","m6","m7"],majorpentatonic:["M2","M3","P5","M6"],minorpentatonic:["m3","P4","P5","m7"],chromatic:["m2","M2","m3","M3","P4","A4","P5","m6","M6","m7","M7"],harmonicchromatic:["m2","M2","m3","M3","P4","A4","P5","m6","M6","m7","M7"]}},module.exports=a})();
-},{}],4:[function(_dereq_,module,exports){
+},{}],5:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   
 "use strict"
@@ -7715,14 +8397,16 @@ Audio = {
     
     // target.future = Gibber.Utilities.future
     // target.solo = Gibber.Utilities.solo    
-    
+    target.Score = Audio.Score
 		target.Clock = Audio.Clock
     target.Seq = Audio.Seqs.Seq
     target.Arp = Audio.Arp // move Arp to sequencers?
     target.ScaleSeq = Audio.Seqs.ScaleSeq
     target.SoundFont = Audio.SoundFont
     target.Speak = Audio.Speak
-
+    target.Additive = Audio.Additive
+    target.Ugen = Audio.Ugen
+    
     target.Rndi = Audio.Core.Rndi
     target.Rndf = Audio.Core.Rndf     
     target.rndi = Audio.Core.rndi
@@ -7731,8 +8415,12 @@ Audio = {
     target.Input = Audio.Input
     
     target.Freesound = Audio.Freesound
+    target.Freesound2 = Audio.Freesound2
+    target.Freesoundjs2 = Audio.Freesoundjs2
     
     target.Scale = Audio.Theory.Scale
+    
+    target.Ensemble = Audio.Ensemble
 
 		target.module = Gibber.import
     // target.ms = Audio.Time.ms
@@ -7741,7 +8429,9 @@ Audio = {
     Audio.Core.Time.export( target )
     Audio.Clock.export( target )
     //target.sec = target.seconds
-    Audio.Core.Binops.export( target )    
+    Audio.Core.Binops.export( target )
+    
+    target.Master = Audio.Master    
   },
   init: function() {
     // post-processing depends on having context instantiated
@@ -7756,6 +8446,8 @@ Audio = {
       if( __onstart !== null ) { __onstart() }
     }
     
+    Audio.Score = Audio.Score( Gibber )
+    Audio.Additive = Audio.Additive( Gibber )
     Gibber.Clock = Audio.Clock
           
     Gibber.Theory = Audio.Theory
@@ -7901,15 +8593,19 @@ Audio = {
     }
   
     Audio.Master.inputs.length = arguments.length
-  
-    Audio.Clock.reset()
+    
+    if( Audio.Clock.shouldResetOnClear !== false ) {
+      Audio.Clock.reset()
+    }
   
     Audio.Master.fx.remove()
   
     Audio.Master.amp = 1
     
     Audio.Core.clear()
-
+    
+    Audio.Clock.seq.connect()
+    
     Audio.Core.out.addConnection( Audio.Master, 1 );
     Audio.Master.destinations.push( Audio.Core.out );
   
@@ -8015,26 +8711,28 @@ Audio = {
     }),
       
     replaceWith: function( replacement ) {
-      for( var i = 0; i < this.destinations.length; i++ ) {
-        replacement.connect( this.destinations[i] )
-      }
+      if( replacement.connect ) {
+        for( var i = 0; i < this.destinations.length; i++ ) {
+          replacement.connect( this.destinations[i] )
+        }
       
-      for( var i = 0; i < this.sequencers.length; i++ ) {
-        this.sequencers[ i ].target = replacement
-        replacement.sequencers.push( this.sequencers[i] )
-      }
+        for( var i = 0; i < this.sequencers.length; i++ ) {
+          this.sequencers[ i ].target = replacement
+          replacement.sequencers.push( this.sequencers[i] )
+        }
       
-      for( var i = 0; i < this.mappingObjects.length; i++ ) {
-        var mapping = this.mappingObjects[ i ]
+        for( var i = 0; i < this.mappingObjects.length; i++ ) {
+          var mapping = this.mappingObjects[ i ]
         
-        if( mapping.targets.length > 0 ) {
-          for( var j = 0; j < mapping.targets.length; j++ ) {
-            var _mapping = mapping.targets[ j ]
+          if( mapping.targets.length > 0 ) {
+            for( var j = 0; j < mapping.targets.length; j++ ) {
+              var _mapping = mapping.targets[ j ]
             
-            if( replacement.mappingProperties[ mapping.name ] ) {
-              _mapping[ 0 ].mapping.replace( replacement, mapping.name, mapping.Name )
-            }else{ // replacement object does not have property that was assigned to mapping
-              _mapping[ 0 ].mapping.remove()
+              if( replacement.mappingProperties[ mapping.name ] ) {
+                _mapping[ 0 ].mapping.replace( replacement, mapping.name, mapping.Name )
+              }else{ // replacement object does not have property that was assigned to mapping
+                _mapping[ 0 ].mapping.remove()
+              }
             }
           }
         }
@@ -8101,13 +8799,24 @@ Audio = {
     
     fadeOut : function( _time ) {
       var time = Audio.Clock.time( _time ),
-          decay = new Audio.Core.ExponentialDecay({ decayCoefficient:.00005, length:time }),
-          //ramp = Mul( decay, this.amp() )
-          line = new Audio.Core.Line( this.amp.value, 0, Audio.Clock.time( time ) )
+          curve = Gibber.Audio.Envelopes.Curve( 0, 1, time, .05, .95, false )
           
-      this.amp( line )
+      this.amp = curve
       
       future( function() { this.amp = 0 }.bind( this ), time )
+      
+      return this
+    },
+    fadeOut2 : function( _time ) {
+      var time = Audio.Clock.time( _time ),
+          curve = Gibber.Audio.Envelopes.Curve( 0, 1, time, .05, .95, false )
+          
+      this.amp = curve
+      
+      future( function() { 
+        this.amp = 0
+        this.kill()
+      }.bind( this ), time )
       
       return this
     },
@@ -8121,6 +8830,8 @@ delete Audio.Core.init
 Audio.Clock =          _dereq_( './audio/clock' )( Gibber )
 Audio.Freesoundjs =    _dereq_( '../external/freesound' )
 Audio.Freesound =      _dereq_( './audio/gibber_freesound' )( Audio.Freesoundjs )
+Audio.Freesoundjs2 =   _dereq_( '../external/freesound2' )
+Audio.Freesound2 =     _dereq_( './audio/gibber_freesound2' )( Audio.Freesoundjs2 )
 Audio.Seqs =           _dereq_( './audio/seq')( Gibber )
 Audio.Theory =         _dereq_( './audio/theory' )( Gibber )
 Audio.FX =             _dereq_( './audio/fx' )( Gibber )
@@ -8137,11 +8848,104 @@ Audio.Vocoder =        _dereq_( './audio/vocoder' )( Gibber )
 Audio.PostProcessing = _dereq_( './audio/postprocessing' )( Gibber )
 Audio.Arp =            _dereq_( './audio/arp' )( Gibber )
 Audio.SoundFont =      _dereq_( './audio/soundfont' )( Gibber )
+Audio.Score =          _dereq_( './audio/score' )
+Audio.Ensemble =       _dereq_( './audio/ensemble' )( Gibber )
+Audio.Ugen =           _dereq_( './audio/ugen')( Gibber )
+Audio.Additive =       _dereq_( './audio/additive')
 
 return Audio
 
 }
-},{"../external/freesound":2,"./audio/analysis":5,"./audio/arp":6,"./audio/audio_input":7,"./audio/bus":8,"./audio/clock":9,"./audio/drums":10,"./audio/envelopes":11,"./audio/fx":12,"./audio/gibber_freesound":13,"./audio/oscillators":14,"./audio/postprocessing":15,"./audio/sampler":16,"./audio/seq":17,"./audio/soundfont":18,"./audio/synths":19,"./audio/theory":20,"./audio/vocoder":21,"gibberish-dsp":1}],5:[function(_dereq_,module,exports){
+},{"../external/freesound":2,"../external/freesound2":3,"./audio/additive":6,"./audio/analysis":7,"./audio/arp":8,"./audio/audio_input":9,"./audio/bus":10,"./audio/clock":11,"./audio/drums":12,"./audio/ensemble":13,"./audio/envelopes":14,"./audio/fx":15,"./audio/gibber_freesound":16,"./audio/gibber_freesound2":17,"./audio/oscillators":18,"./audio/postprocessing":19,"./audio/sampler":20,"./audio/score":21,"./audio/seq":22,"./audio/soundfont":23,"./audio/synths":24,"./audio/theory":25,"./audio/ugen":26,"./audio/vocoder":27,"gibberish-dsp":1}],6:[function(_dereq_,module,exports){
+module.exports = function( Gibber ) {
+
+/*
+XXX = Ugen({
+  name:'Vox',
+  inputs:{ 
+    frequency:{ min:50, max:3000, default:440 },
+    amp: { min:0, max:1, default:.1 }
+  },
+  callback: function( frequency, amp ) {
+    this.out = this.sin( this.PI2 * (this.phase++ * frequency / 44100) ) * amp
+    
+    // if stereo, make this.out an array an fill appropriately
+    // do not create a new array for every sample
+    return this.out
+  },
+  init: function() {
+    this.sin = Math.sin
+    this.PI2 = Math.PI * 2
+    this.phase = 0
+    this.out =  0
+  }
+})
+*/
+    var Additive = Gibber.Audio.Ugen({
+      name:'additive',
+      inputs: {
+        frequency:{ min:50, max:3000, default:440 },
+        amp: { min:0, max:1, default:.5 }
+        //pan: { min:0, max:1, default:-1 }
+      },
+      callback: function( frequency, amp, pan ) {
+        var sines = this.sines, sine, harmonics = this.harmonics
+        
+        this.out = 0
+        
+        for( var i = 0, l = sines.length; i < l; i++  ) {
+          sine = sines[ i ]
+          this.out += sine( frequency * sine.harmonic, sine.amp )
+          // if ( phase++ % 88200 === 0 ) console.log( frequency, sine.amp, this.out )
+        }
+      
+        return this.out * amp
+      },
+      init: function() {
+        this.sines = []
+        //this.frequency = 440
+        //if( typeof this.harmonics === 'undefined' ) this.harmonics = [1,1]
+        
+        for( var i = 0, j = 0; i < this.harmonics.length / 2; i++, j+=2 ) {
+          var harmonicIndex = i * 2
+          this.sines[ i ] = Gibber.Audio.Oscillators.Sine(440,1)._.callback
+          this.sines[ i ].harmonic = this.harmonics[ j ]
+          this.sines[ i ].amp = this.harmonics[ j + 1 ]
+        }
+        
+        this.out = 0
+        console.log( this.sines )
+      }
+    })
+  
+  //  return Additive
+    //}
+  
+  return Additive
+}
+
+/*Sine = Ugen({
+  name:'Vox',
+  inputs:{ 
+    frequency:{ min:50, max:3000, default:440 },
+    amp: { min:0, max:1, default:.1 }
+  },
+  callback: function( frequency, amp ) {
+    this.out = this.sin( this.PI2 * (this.phase++ * frequency / 44100) ) * amp
+    return this.out
+  },
+  init: function() {
+    this.sin = Math.sin
+    this.PI2 = Math.PI * 2
+    this.phase = 0
+    this.out =  0
+  }
+})
+
+Sine.connect()
+Sine.frequency.seq( [440,880], 1/2 )
+*/
+},{}],7:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   "use strict"
   
@@ -8219,7 +9023,7 @@ module.exports = function( Gibber ) {
   //module.exports = function( __Gibber ) { if( typeof Gibber === 'undefined' ) { Gibber = __Gibber; } return Analysis }
   
 }
-},{"gibberish-dsp":1}],6:[function(_dereq_,module,exports){
+},{"gibberish-dsp":1}],8:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   
 var theory = _dereq_('../../external/teoria.min'),
@@ -8369,7 +9173,7 @@ Arp = function(notation, beats, pattern, mult, scale) {
 return Arp
 
 }
-},{"../../external/teoria.min":3,"./seq":17}],7:[function(_dereq_,module,exports){
+},{"../../external/teoria.min":4,"./seq":22}],9:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) { 
   "use strict"
   
@@ -8424,7 +9228,7 @@ module.exports = function( Gibber ) {
   
   return Input
 }
-},{"gibberish-dsp":1}],8:[function(_dereq_,module,exports){
+},{"gibberish-dsp":1}],10:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   "use strict"
   
@@ -8560,7 +9364,7 @@ module.exports = function( Gibber ) {
   
   return Busses
 }
-},{"gibberish-dsp":1}],9:[function(_dereq_,module,exports){
+},{"gibberish-dsp":1}],11:[function(_dereq_,module,exports){
 !function() {
   
 var times = [],
@@ -8582,6 +9386,7 @@ var Clock = {
   codeToExecute : [],
   signature: { lower: 4, upper: 4 },
   sequencers:[],
+  shouldResetOnClear:true,
   timeProperties : [ 'attack', 'decay', 'sustain', 'release', 'offset', 'time' ],
   phase : 0,
   export: function( target ) {
@@ -8631,7 +9436,7 @@ var Clock = {
     this.phase = 0
     this.currentBeat = 0
     this.rate = 1
-    this.start()
+    this.start( false )
   },
   
   tap : function() {
@@ -8653,15 +9458,18 @@ var Clock = {
   },
   
   start : function( shouldInit ) {    
+    var _phase = 0
+    
     if( shouldInit ) {
       $.extend( this, {
         properties: { rate: 1 },
         name:'master_clock',
         callback : function( rate ) {
+          _phase++ 
           return rate
         }
       })
-    
+     
       this.__proto__ = new Gibberish.ugen()
       this.__proto__.init.call( this )
 
@@ -8690,18 +9498,26 @@ var Clock = {
         rate : { min: .1, max: 2, output: LINEAR, timescale: 'audio' },
         bpm : { min: 20, max: 200, output: LINEAR, timescale: 'audio' },        
       })
+      
+      this.setPhase = function( v ) { _phase = v }
+      this.getPhase = function() { return _phase }
+
+      Clock.seq = new Gibberish.PolySeq({
+        seqs : [{
+          target:Clock,
+          values: [ Clock.processBeat.bind( Clock ) ],
+          durations:[ 1/4 ],
+        }],
+        rate: Clock,
+      })
+      Gibber.Audio.Seqs.Seq.children.push( Clock.seq ) // needed for Gabber
+      Clock.seq.connect().start()
+      Clock.seq.timeModifier = Clock.time.bind( Clock )
+      
+    }else{
+      Clock.seq.setPhase(0)
+      Clock.seq.connect().start()
     }
-    
-    Clock.seq = new Gibberish.PolySeq({
-      seqs : [{
-        target:Clock,
-        values: [ Clock.processBeat.bind( Clock ) ],
-        durations:[ 1/4 ],
-      }],
-      rate: Clock,
-    })
-    Clock.seq.connect().start()
-    Clock.seq.timeModifier = Clock.time.bind( Clock )
   },
   
   addMetronome: function( metronome ) {
@@ -8734,15 +9550,14 @@ var Clock = {
   
   beats : function(val) {
     var sampleRate = typeof Gibberish.context !== 'undefined' ? Gibberish.context.sampleRate : 44100,
-        samplesPerBeat = sampleRate / ( Clock.baseBPM / 60 )
+        beatsPerSecond = Clock.bpm / 60,
+        samplesPerBeat = sampleRate / beatsPerSecond
         
-    return samplesPerBeat * ( val * ( 4 / Clock.signature.lower ) );
+    return samplesPerBeat * val
   },
   
   Beats : function(val) {
-    return function() {
-      return Gibber.Clock.beats( val )
-    }
+    return Clock.beats.bind( null, val )
   },
   
   measures: function( val ) {
@@ -8768,7 +9583,7 @@ module.exports = function( __Gibber ) {
 }
 
 }()
-},{"gibberish-dsp":1}],10:[function(_dereq_,module,exports){
+},{"gibberish-dsp":1}],12:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   "use strict"
   
@@ -8787,6 +9602,7 @@ module.exports = function( Gibber ) {
         'Cowbell',
         'Clave',
         'Tom',
+        'Clap'
       ],
       _mappingProperties = {
         Drums: {
@@ -8827,6 +9643,10 @@ module.exports = function( Gibber ) {
           out: { min: 0, max: 1, output: LINEAR, timescale: 'audio', dimensions:1 },
           amp: { min: 0, max: 1, output: LOGARITHMIC,timescale: 'audio',}, },
         Tom     : { 
+          out: { min: 0, max: 1, output: LINEAR, timescale: 'audio', dimensions:1 },
+          amp: { min: 0, max: 1, output: LOGARITHMIC,timescale: 'audio',}, 
+        },
+        Clap     : { 
           out: { min: 0, max: 1, output: LINEAR, timescale: 'audio', dimensions:1 },
           amp: { min: 0, max: 1, output: LOGARITHMIC,timescale: 'audio',}, 
         },
@@ -8896,6 +9716,7 @@ module.exports = function( Gibber ) {
         props = Gibber.processArguments( args, 'Drums' )
         
     $.extend( true, obj, props)
+    console.log("PROPS PROPS", props)
   
     if( Array.isArray( obj ) ) {
       obj = Gibber.construct( Gibberish.Bus2, obj ).connect( Gibber.Master )
@@ -8922,14 +9743,24 @@ module.exports = function( Gibber ) {
   		}
   	}
     
-	
   	for(var key in obj.kit) {
-  		var drum = obj.kit[key];
-  		obj[key] = { sampler: new Gibberish.Sampler({ file:drum.file, pitch:1, amp:drum.amp }), pitch:drum.pitch, amp:drum.amp }
-  		obj[key].sampler.pan = drum.pan
-  		obj[key].sampler.connect( obj )
-  		obj[key].fx = obj[key].sampler.fx
-  		obj.children.push( obj[key].sampler )
+  		var drum = obj.kit[key],
+          ugen = drum.file ? { ugen: new Gibberish.Sampler({ file:drum.file, pitch:1, amp:drum.amp }), pitch:drum.pitch, amp:drum.amp } : drum
+      
+      if( ugen ) {
+        if( isNaN( ugen.pitch ) ) ugen.pitch = 1
+        if( isNaN( ugen.pan ) )   ugen.pan   = 0
+        if( isNaN( ugen.amp ) )   ugen.amp = 1
+        if( typeof ugen.symbol === 'undefined' ) ugen.symbol = key
+        
+    		obj[key] = ugen
+        // console.log("KEY", key, ugen, drum, obj[key], obj[key].ugen )
+    		obj[key].ugen.pan = drum.pan
+        if( !drum.file ) drum.ugen.disconnect() // disconnect non-sampler ugens
+    		obj[key].ugen.connect( obj )
+    		obj[key].fx = obj[key].ugen.fx
+    		obj.children.push( obj[key].ugen )
+      }
   	}
 	
     obj.mod = obj.polyMod
@@ -8949,7 +9780,9 @@ module.exports = function( Gibber ) {
           if( typeof note === 'string' ) {
         		for( var key in obj.kit ) {
         			if( note === obj.kit[ key ].symbol ) {
-        				obj[ key ].sampler.note( p, obj[key].amp );
+                if( obj[ key ].ugen ) {
+          				obj[ key ].ugen.note( p, obj[key].amp );
+                }
                 //var p = p //this.pitch() 
                 // if( this[ key ].sampler.pitch !== p )
                   // this[ key ].sampler.pitch = p
@@ -8958,7 +9791,7 @@ module.exports = function( Gibber ) {
         		}
           }else{
             var drum = obj[ Object.keys( obj.kit )[ note ] ]
-            drum.sampler.note( p.value, drum.sampler.amp )
+            drum.ugen.note( p.value, drum.ugen.amp )
             // if( drum.sampler.pitch !== p )
             //   drum.sampler.pitch = p
           }
@@ -8968,8 +9801,13 @@ module.exports = function( Gibber ) {
       		for( var key in obj.kit ) {
       			if( nt === obj.kit[ key ].symbol ) {
               //console.log("PITCH", p )
-      				obj[ key ].sampler.note( p, obj[key].amp );
-              obj[ key ].sampler.pitch = p
+              if( obj[key].file ) {
+        				obj[ key ].ugen.note( p, obj[key].amp );
+                obj[ key ].ugen.pitch = p
+              }else{
+        				obj[ key ].ugen.note( obj[ key ].pitch, obj[key].amp );
+                obj[ key ].ugen.pitch = p
+              }
               //var p = this.pitch.value //this.pitch() 
               // if( this[ key ].sampler.pitch !== p )
               //   this[ key ].sampler.pitch = p
@@ -8982,7 +9820,7 @@ module.exports = function( Gibber ) {
               key = keys[ num % keys.length ], 
               drum = obj[ key ]
           
-          drum.sampler.note( p, drum.sampler.amp )
+          drum.ugen.note( p, drum.ugen.amp )
           
           // if( drum.sampler.pitch !== p )
           //   drum.sampler.pitch = p
@@ -8990,8 +9828,12 @@ module.exports = function( Gibber ) {
       }
   	}
     
+    Gibber.createProxyMethods( obj, [ 'note' ] )
+    
   	obj.pitch = 1;
     
+    if( $.type( props[0] )  === 'object' ) { props[0] = props[0].note }
+        
     if( typeof props !== 'undefined') {
       switch( $.type( props[0] ) ) {
         case 'string':
@@ -9012,7 +9854,8 @@ module.exports = function( Gibber ) {
               duration = 1 / seq.length  
             }
             
-            if( seq.indexOf('.rnd(') > -1) {// || seq.indexOf('.random(') > -1 ) {
+            if( seq.indexOf('.rnd(') > -1) {
+              // || seq.indexOf('.random(') > -1 ) {
               seq = seq.split( '.rnd' )[0]
               seq = seq.split('').rnd()
             }
@@ -9033,50 +9876,16 @@ module.exports = function( Gibber ) {
               duration = durationsPattern
             }
             
-            obj.seq.add({
-              key:'note',
-              values: Gibber.construct( Gibber.Pattern, seq ),
-              durations: Gibber.construct( Gibber.Pattern, [duration] ),
-              target:obj
-            })
-            
-            var seqNumber = obj.seq.seqs.length - 1
-            Object.defineProperties( obj.note, {
-              values: {
-                configurable:true,
-                get: function() { return obj.seq.seqs[ seqNumber ].values },
-                set: function( val ) {
-                  var pattern = Gibber.construct( Gibber.Pattern, val )
-  
-                  if( !Array.isArray( pattern ) ) {
-                    pattern = [ pattern ]
-                  }
-                  // if( key === 'note' && obj.seq.scale ) {  
-                  //   v = makeNoteFunction( v, obj.seq )
-                  // }
-                  //console.log("NEW VALUES", v )
-                  obj.seq.seqs[ seqNumber ].values = pattern
-                }
-              },
-              durations: {
-                configurable:true,
-                get: function() { return obj.seq.seqs[ seqNumber ].durations },
-                set: function( val ) {
-                  if( !Array.isArray( val ) ) {
-                    val = [ val ]
-                  }
-                  obj.seq.seqs[ seqNumber ].durations = val   //.splice( 0, 10000, v )
-                }
-              },
-            })
+            obj.note.seq( seq, [duration], i )
+            //obj.note.seq( Gibber.construct( Gibber.Pattern, seq ), Gibber.construct( Gibber.Pattern, [duration] ), i )
           }
 
           break;
         case 'object':
       		if( typeof props[0].note === 'string' ) props[0].note = props[0].note.split("")
-      		props[0].target = obj
+      		props[0].target    = obj
           props[0].durations = props[0].durations ? Gibber.Clock.Time( props[0].durations ) : Gibber.Clock.Time( 1 / props[0].note.length )
-          props[0].offset = props[0].offset ? Gibber.Clock.time( props[0].offset ) : 0
+          props[0].offset    = props[0].offset ? Gibber.Clock.time( props[0].offset ) : 0
       	  //obj.seq = Seq( props[0] );
           
           break;
@@ -9106,10 +9915,10 @@ module.exports = function( Gibber ) {
 	
   	if( props.pitch ) obj.pitch = props.pitch;
 	
-  	if( typeof props.snare !== "undefined" ) 	{ $.extend( obj.snare.sampler, props.snare ); $.extend( obj.snare, props.snare); }
-  	if( typeof props.kick !== "undefined" ) 	{ $.extend( obj.kick.sampler, props.kick ); $.extend( obj.kick, props.kick); }
-  	if( typeof props.hat !== "undefined" ) 	{ $.extend( obj.hat.sampler, props.hat ); $.extend( obj.hat, props.hat); }
-  	if( typeof props.openHat !== "undefined" ) { $.extend( obj.openHat.sampler, props.openHat ); $.extend( obj.openHat, props.openHat); }
+  	if( typeof props.snare !== "undefined" ) 	{ $.extend( obj.snare.ugen, props.snare ); $.extend( obj.snare, props.snare); }
+  	if( typeof props.kick !== "undefined" ) 	{ $.extend( obj.kick.ugen, props.kick ); $.extend( obj.kick, props.kick); }
+  	if( typeof props.hat !== "undefined" ) 	{ $.extend( obj.hat.ugen, props.hat ); $.extend( obj.hat, props.hat); }
+  	if( typeof props.openHat !== "undefined" ) { $.extend( obj.openHat.ugen, props.openHat ); $.extend( obj.openHat, props.openHat); }
  	
   	obj.amp   = isNaN(_amp) ? 1 : _amp;
 	
@@ -9117,10 +9926,10 @@ module.exports = function( Gibber ) {
     
     obj.start = function() { obj.seq.start( true ) }
     obj.stop = function() { obj.seq.stop() }
-    obj.shuffle = function() { obj.seq.shuffle() }
+    obj.shuffle = function() { obj.note.values.shuffle() }
     obj.reset = function() { obj.seq.reset() }
 
-    Gibber.createProxyMethods( obj, [ 'play','stop','shuffle','reset','start','send','note' ] )
+    Gibber.createProxyMethods( obj, [ 'play','stop','shuffle','reset','start','send' ] )
             
     obj.seq.start( true )
 
@@ -9160,6 +9969,7 @@ module.exports = function( Gibber ) {
     Object.defineProperty(obj, '_', { get: function() { obj.kill(); return obj }, set: function() {} })
 		
   	obj.pitch = 1;
+    
   	/*obj.kit = Drums.kits['default'];
     
   	if(typeof arguments[0] === "object") {
@@ -9286,7 +10096,7 @@ module.exports = function( Gibber ) {
       }
   	}
     
-    Gibber.createProxyMethods( obj, [ 'play','stop','shuffle','reset','start','send' ] )
+    Gibber.createProxyMethods( obj, [ 'play','stop','shuffle','reset','start','send','note' ] )
     
     if( typeof props !== 'undefined') {
       switch( $.type( props[0] ) ) {
@@ -9294,80 +10104,46 @@ module.exports = function( Gibber ) {
           var notes = props[0], _seqs = [], _durations = [], __durations = [], seqs = notes.split('|'), timeline = {}
           
           for( var i = 0; i < seqs.length; i++ ) {
-            !function( num ) {
-              var seq = seqs[ num ], duration, hasTime = false, idx = seq.indexOf(',')
+            var seq = seqs[i], duration, hasTime = false, idx = seq.indexOf(',')
 
-              if( idx > -1 ) {
-                var _value = seq.substr( 0, idx ),
-                    duration = seq.substr( idx + 1 )
+            if( idx > -1 ) {
+              var _value = seq.substr( 0, idx ),
+                  duration = seq.substr( idx + 1 )
               
-                duration = eval(duration)
-                hasTime = true
-                seq = _value.trim().split('')
-              }else{
-                seq = seq.trim().split('')
-                duration = 1 / seq.length  
-              }
+              duration = eval(duration)
+              hasTime = true
+              seq = _value.trim().split('')
+            }else{
+              seq = seq.trim().split('')
+              duration = 1 / seq.length  
+            }
             
-              if( seq.indexOf('.rnd(') > -1) {
-                seq = seq.split( '.rnd' )[0]
-                seq = seq.split('').rnd()
-              }
+            if( seq.indexOf('.rnd(') > -1) {
+              // || seq.indexOf('.random(') > -1 ) {
+              seq = seq.split( '.rnd' )[0]
+              seq = seq.split('').rnd()
+            }
             
-              if( typeof props[1] !== 'undefined') { 
-                duration = props[1]
-                if( !Array.isArray( duration ) ) duration = [ duration ]
+            if( typeof props[1] !== 'undefined') { 
+              duration = props[1]
+              if( !Array.isArray( duration ) ) duration = [ duration ]
               
-                var durationsPattern = Gibber.construct( Gibber.Pattern, duration )
+              var durationsPattern = Gibber.construct( Gibber.Pattern, duration )
         
-                if( duration.randomFlag ) {
-                  durationsPattern.filters.push( function() { return [ durationsPattern.values[ rndi(0, durationsPattern.values.length - 1) ], 1 ] } )
-                  for( var i = 0; i < duration.randomArgs.length; i+=2 ) {
-                    durationsPattern.repeat( duration.randomArgs[ i ], duration.randomArgs[ i + 1 ] )
-                  }
+              if( duration.randomFlag ) {
+                durationsPattern.filters.push( function() { return [ durationsPattern.values[ rndi(0, durationsPattern.values.length - 1) ], 1 ] } )
+                for( var i = 0; i < duration.randomArgs.length; i+=2 ) {
+                  durationsPattern.repeat( duration.randomArgs[ i ], duration.randomArgs[ i + 1 ] )
                 }
-              
-                duration = durationsPattern
               }
-            
-              obj.seq.add({
-                key:'note',
-                values: Gibber.construct( Gibber.Pattern, seq ),
-                durations: Gibber.construct( Gibber.Pattern, [duration] ),
-                target:obj
-              })
-            
-              var seqNumber = obj.seq.seqs.length - 1
-              Object.defineProperties( obj.note, {
-                values: {
-                  configurable:true,
-                  get: function() { return obj.seq.seqs[ seqNumber ].values },
-                  set: function( val ) {
-                    var pattern = Gibber.construct( Gibber.Pattern, val )
-    
-                    if( !Array.isArray( pattern ) ) {
-                      pattern = [ pattern ]
-                    }
-                    // if( key === 'note' && obj.seq.scale ) {  
-                    //   v = makeNoteFunction( v, obj.seq )
-                    // }
-                    //console.log("NEW VALUES", v )
-                    obj.seq.seqs[ seqNumber ].values = pattern
-                  }
-                },
-                durations: {
-                  configurable:true,
-                  get: function() { return obj.seq.seqs[ seqNumber ].durations },
-                  set: function( val ) {
-                    if( !Array.isArray( val ) ) {
-                      val = [ val ]
-                    }
-                    obj.seq.seqs[ seqNumber ].durations = val   //.splice( 0, 10000, v )
-                  }
-                },
-              })
-            }( i ) 
+              
+              duration = durationsPattern
+            }
+              
+            obj.note.seq( Gibber.construct( Gibber.Pattern, seq ), Gibber.construct( Gibber.Pattern, [duration] ), i )
           }
+
+          break;
           
           break;
         case 'object':
@@ -9387,10 +10163,10 @@ module.exports = function( Gibber ) {
 	
   	if( props.pitch ) obj.pitch = props.pitch;
 	
-  	if( typeof props.snare !== "undefined" ) 	{ $.extend( obj.snare.sampler, props.snare ); $.extend( obj.snare, props.snare); }
-  	if( typeof props.kick !== "undefined" ) 	{ $.extend( obj.kick.sampler, props.kick ); $.extend( obj.kick, props.kick); }
-  	if( typeof props.hat !== "undefined" ) 	{ $.extend( obj.hat.sampler, props.hat ); $.extend( obj.hat, props.hat); }
-  	if( typeof props.openHat !== "undefined" ) { $.extend( obj.openHat.sampler, props.openHat ); $.extend( obj.openHat, props.openHat); }
+  	if( typeof props.snare !== "undefined" ) 	{ $.extend( obj.snare.ugen, props.snare ); $.extend( obj.snare, props.snare); }
+  	if( typeof props.kick !== "undefined" ) 	{ $.extend( obj.kick.ugen, props.kick ); $.extend( obj.kick, props.kick); }
+  	if( typeof props.hat !== "undefined" ) 	{ $.extend( obj.hat.ugen, props.hat ); $.extend( obj.hat, props.hat); }
+  	if( typeof props.openHat !== "undefined" ) { $.extend( obj.openHat.ugen, props.openHat ); $.extend( obj.openHat, props.openHat); }
  	
   	obj.amp   = isNaN(_amp) ? 1 : _amp;
 	
@@ -9459,10 +10235,200 @@ module.exports = function( Gibber ) {
   };
   Percussion.Drums.kits.default = Percussion.Drums.kits.electronic;
   
+  Percussion.Drums.makeKit = function( name, kit ) {
+    Percussion.Drums.kits[ name ] = kit
+  }
+  
+  Percussion.Presets.Kick = {
+    short: { decay:.1, amp:.75 }
+  }
+  Percussion.Presets.Snare = {
+    crack: { snappy:1, offset:1/4 }
+  }
+  
   return Percussion
   
 }
-},{"gibberish-dsp":1}],11:[function(_dereq_,module,exports){
+},{"gibberish-dsp":1}],13:[function(_dereq_,module,exports){
+module.exports = function( Gibber ) {
+  "use strict"
+  
+  var Gibberish = _dereq_( 'gibberish-dsp' ),
+      $ = Gibber.dollar,
+      Clock = Gibber.Clock,
+      curves = Gibber.outputCurves,
+      LINEAR = curves.LINEAR,
+      LOGARITHMIC = curves.LOGARITHMIC,
+      mappingProperties = {
+        amp: {
+          min: 0, max: 1,
+          output: LINEAR,
+          timescale: 'audio',
+        },
+        pan: {
+          min: -.75, max: .75,
+          output: LINEAR,
+          timescale: 'audio',
+        },
+        out: { min: 0, max: 1, output: LINEAR, timescale: 'audio', dimensions:1 },
+      }    
+      
+  var Ensemble = function( props ) {
+    var obj = new Gibberish.Bus2( obj ).connect( Gibber.Master )
+    
+		obj.name = 'Ensemble'
+    obj.type = 'Gen'
+    obj.children = []
+    
+    $.extend( true, obj, Gibber.Audio.ugenTemplate )
+    
+    obj.fx.ugen = obj
+  
+    Object.defineProperty(obj, '_', { get: function() { obj.kill(); return obj }, set: function() {} })
+    
+    Gibber.createProxyProperties( obj, mappingProperties )
+    
+  	for(var key in props) {
+  		var ugenDesc = props[key],
+          ugen = ugenDesc.file ? { ugen: new Gibberish.Sampler({ file:ugenDesc.file, pitch:1, amp:ugenDesc.amp }), pitch:ugenDesc.pitch, amp:ugenDesc.amp } : ugenDesc
+      
+      if( ugen ) {
+        if( isNaN( ugen.pitch ) ) ugen.pitch = 1
+        if( isNaN( ugen.pan ) )   ugen.pan   = 0
+        if( isNaN( ugen.amp ) )   ugen.amp = 1
+        if( typeof ugen.symbol === 'undefined' ) ugen.symbol = key
+        
+    		obj[key] = ugen
+        // console.log("KEY", key, ugen, drum, obj[key], obj[key].ugen )
+    		obj[key].ugen.pan = ugen.pan
+        if( !ugenDesc.file ) ugen.ugen.disconnect() // disconnect non-sampler ugens
+    		obj[key].ugen.connect( obj )
+    		obj[key].fx = obj[key].ugen.fx
+    		obj.children.push( obj[key].ugen )
+      }
+  	}
+    
+    obj.note = function(nt) {
+      // var p = typeof obj.pitch === 'function' ? obj.pitch() : obj.pitch
+      var p = obj.pitch
+      if( typeof nt === 'string' ) {
+    		for( var key in props ) {
+          var ugen = props[ key ]
+    			if( nt === ugen.symbol ) {
+            if( ugen.file ) {
+      				ugen.ugen.note( p, obj[key].amp );
+            }else{
+      				ugen.ugen.note( ugen.pitch * p, ugen.amp );
+            }
+
+    				break;
+    			}
+    		}
+      }else{
+        var keys = Object.keys( obj.kit ),
+            num = Math.abs( nt ),
+            key = keys[ num % keys.length ], 
+            ugen = obj[ key ]
+        
+        ugen.ugen.note( p, ugen.ugen.amp )
+      }
+    }
+    
+    var seqNumber
+    obj.play = function( pattern ) {
+      var notes = pattern, _seqs = [], _durations = [], __durations = [], seqs = notes.split('|'), timeline = {}
+
+      for(var i = 0; i < obj.seq.seqs.length; i++ ) {
+        obj.seq.seqs[i].shouldStop = true
+      }
+      obj.seq.seqs.length = 0
+      
+      for( var i = 0; i < seqs.length; i++ ) {
+        var seq = seqs[i], duration, hasTime = false, idx = seq.indexOf(',')
+
+        if( idx > -1 ) {
+          var _value = seq.substr( 0, idx ),
+              duration = seq.substr( idx + 1 )
+          
+          duration = eval(duration)
+          hasTime = true
+          seq = _value.trim().split('')
+        }else{
+          seq = seq.trim().split('')
+          duration = 1 / seq.length  
+        }
+        
+        if( seq.indexOf('.rnd(') > -1) {// || seq.indexOf('.random(') > -1 ) {
+          seq = seq.split( '.rnd' )[0]
+          seq = seq.split('').rnd()
+        }
+        
+        if( typeof arguments[1] !== 'undefined') { 
+          duration = arguments[1]
+          if( !Array.isArray( duration ) ) duration = [ duration ]
+          
+          var durationsPattern = Gibber.construct( Gibber.Pattern, duration )
+            
+          if( duration.randomFlag ) {
+            durationsPattern.filters.push( function() { return [ durationsPattern.values[ rndi(0, durationsPattern.values.length - 1) ], 1 ] } )
+            for( var i = 0; i < duration.randomArgs.length; i+=2 ) {
+              durationsPattern.repeat( duration.randomArgs[ i ], duration.randomArgs[ i + 1 ] )
+            }
+          }
+          
+          duration = durationsPattern
+        }
+        
+        obj.seq.add({
+          key:'note',
+          values: Gibber.construct( Gibber.Pattern, seq ),
+          durations: Gibber.construct( Gibber.Pattern, [duration] ),
+          target:obj
+        })
+        
+        seqNumber = obj.seq.seqs.length - 1
+        Object.defineProperties( obj.note, {
+          values: {
+            configurable:true,
+            get: function() { return obj.seq.seqs[ seqNumber ].values },
+            set: function( val ) {
+              var pattern = Gibber.construct( Gibber.Pattern, val )
+
+              if( !Array.isArray( pattern ) ) {
+                pattern = [ pattern ]
+              }
+              // if( key === 'note' && obj.seq.scale ) {  
+              //   v = makeNoteFunction( v, obj.seq )
+              // }
+              //console.log("NEW VALUES", v )
+              obj.seq.seqs[ seqNumber ].values = pattern
+            }
+          },
+          durations: {
+            configurable:true,
+            get: function() { return obj.seq.seqs[ seqNumber ].durations },
+            set: function( val ) {
+              if( !Array.isArray( val ) ) {
+                val = [ val ]
+              }
+              obj.seq.seqs[ seqNumber ].durations = val   //.splice( 0, 10000, v )
+            }
+          },
+        })
+      }
+    }
+    
+  	obj.pitch = 1;
+    
+    obj.seq.start()
+    obj.connect()
+    
+    return obj
+  }
+
+  return Ensemble
+}
+},{"gibberish-dsp":1}],14:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   "use strict"
   
@@ -9474,7 +10440,10 @@ module.exports = function( Gibber ) {
       LINEAR = curves.LINEAR,
       LOGARITHMIC = curves.LOGARITHMIC,
       types = [
-        'Line', 
+        'Curve',
+        'Line',
+        'Ease',
+        'Lines',
         'AD',
         'ADSR' 
       ],
@@ -9496,6 +10465,57 @@ module.exports = function( Gibber ) {
             timescale: 'audio',
           }
         },
+        Lines: {           
+          time: {
+            min: 0, max: 8,
+            output: LINEAR,
+            timescale: 'audio',
+          }
+        },
+        Ease: {
+          /*start: {
+            min: 0, max: 1,
+            output: LINEAR,
+            timescale: 'audio',
+          },
+          end: {
+            min: 0, max: 1,
+            output: LINEAR,
+            timescale: 'audio',
+          },
+          time: {
+            min: 0, max: 8,
+            output: LINEAR,
+            timescale: 'audio',
+          },*/
+        },
+        Curve: {
+          start: {
+            min: 0, max: 1,
+            output: LINEAR,
+            timescale: 'audio',
+          },
+          end: {
+            min: 0, max: 1,
+            output: LINEAR,
+            timescale: 'audio',
+          },
+          time: {
+            min: 0, max: 8,
+            output: LINEAR,
+            timescale: 'audio',
+          },
+          a: {
+            min: 0, max: 1,
+            output: LINEAR,
+            timescale: 'audio',
+          },
+          b: {
+            min: 0, max: 1,
+            output: LINEAR,
+            timescale: 'audio',
+          },
+        },
         AD: {
           attack: {
             min: 0, max: 8,
@@ -9507,28 +10527,28 @@ module.exports = function( Gibber ) {
             output: LINEAR,
             timescale: 'audio',
           },
-          ADSR: {
-            attack: {
-              min: 0, max: 8,
-              output: LINEAR,
-              timescale: 'audio',
-            },
-            decay: {
-              min: 0, max: 8,
-              output: LINEAR,
-              timescale: 'audio',
-            },
-            sustain: {
-              min: 0, max: 8,
-              output: LINEAR,
-              timescale: 'audio',
-            },
-            release: {
-              min: 0, max: 8,
-              output: LINEAR,
-              timescale: 'audio',
-            }
+        },
+        ADSR: {
+          attack: {
+            min: 0, max: 8,
+            output: LINEAR,
+            timescale: 'audio',
           },
+          decay: {
+            min: 0, max: 8,
+            output: LINEAR,
+            timescale: 'audio',
+          },
+          sustain: {
+            min: 0, max: 8,
+            output: LINEAR,
+            timescale: 'audio',
+          },
+          release: {
+            min: 0, max: 8,
+            output: LINEAR,
+            timescale: 'audio',
+          }
         },
       };
   
@@ -9544,7 +10564,13 @@ module.exports = function( Gibber ) {
         
         if( typeof args[0] !== 'object' ) {
           // console.log( args[0], args[1], args[2], Gibber.Clock.time( args[2] ) )
-          obj = new Gibberish[ type ]( args[0], args[1], Gibber.Clock.time( args[2] ), args[3] )
+          obj = new Gibberish[ type ]( args[0], args[1], Gibber.Clock.time( args[2] ), args[3], args[4], args[5], args[6] )
+        }else if( name === 'Lines' ){
+          obj = new Gibberish.Lines( args[0], args[1], args[2] )
+        }else if( name === 'Ease' ){
+          obj = new Gibberish.Ease( args[0], args[1], args[2], args[3], args[4] )
+        }else if( name === 'Curve' ){ // not needed?
+          obj = new Gibberish.Curve( args[0], args[1], args[2], args[3], args[4], args[5], args[6] )
         }else{
           obj = Gibber.construct( Gibberish[ type ], args[0] )
         }
@@ -9555,9 +10581,9 @@ module.exports = function( Gibber ) {
         
         Gibber.createProxyProperties( obj, _mappingProperties[ name ] ) 
         
-        Gibber.processArguments2( obj, args, obj.name )
+        if( name !== 'Lines' ) Gibber.processArguments2( obj, args, obj.name )
         
-        if( name === 'AD' || name === 'ADSR' ) {
+        if( name === '.' || name === 'ADSR' ) {
           Gibber.createProxyMethods( obj, ['run'] )
         }
         
@@ -9571,7 +10597,7 @@ module.exports = function( Gibber ) {
 
 }
 
-},{"gibberish-dsp":1}],12:[function(_dereq_,module,exports){
+},{"gibberish-dsp":1}],15:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   "use strict"
   
@@ -9827,10 +10853,13 @@ module.exports = function( Gibber ) {
         
         Gibber.processArguments2( obj, args, obj.name )
         
+        if( name === 'Delay' ) obj.rate = Gibber.Clock
+        
         args.input = 0
         
         obj.toString = function() { return '> ' + name }
         
+        if( obj.presetInit ) obj.presetInit() 
         return obj
       }
     })()
@@ -9963,7 +10992,7 @@ module.exports = function( Gibber ) {
 
   return FX  
 }
-},{"gibberish-dsp":1}],13:[function(_dereq_,module,exports){
+},{"gibberish-dsp":1}],16:[function(_dereq_,module,exports){
 module.exports = function( freesound ) {
   freesound.apiKey = "4287s0onpqpp492n8snr27sp3o228nns".replace(/[a-zA-Z]/g, function(c) {
     return String.fromCharCode((c <= "Z" ? 90 : 122) >= (c = c.charCodeAt(0) + 13) ? c : c - 26);
@@ -9987,7 +11016,7 @@ module.exports = function( freesound ) {
         sampler.buffer = Freesound.loaded[filename];
         sampler.bufferLength = sampler.buffer.length;
         sampler.isLoaded = true;
-        sampler.end = sampler.bufferLength;
+        //sampler.end = sampler.bufferLength;
         sampler.setBuffer(sampler.buffer);
         sampler.setPhase(sampler.bufferLength);
         sampler.filename = filename;
@@ -10112,7 +11141,164 @@ module.exports = function( freesound ) {
 
   return Freesound
 }
-},{}],14:[function(_dereq_,module,exports){
+},{}],17:[function(_dereq_,module,exports){
+module.exports = function( freesound ) {
+  freesound.setToken('6a00f80ba02b2755a044cc4ef004febfc4ccd476')
+
+  var Freesound = function() {
+    var sampler = Sampler();
+
+    var key = arguments[0] || 96541;
+    var callback = null;
+    var filename, request;
+
+    sampler.done = function(func) {
+      callback = func
+    }
+
+    var onload = function(request) {
+      Gibber.log(filename + " loaded.", request )
+      Gibber.Audio.Core.context.decodeAudioData(request.response, function(buffer) {
+        Freesound.loaded[filename] = buffer.getChannelData(0)
+        sampler.buffer = Freesound.loaded[filename];
+        sampler.bufferLength = sampler.buffer.length;
+        sampler.isLoaded = true;
+        //sampler.end = sampler.bufferLength;
+        sampler.setBuffer(sampler.buffer);
+        sampler.setPhase(sampler.bufferLength);
+        sampler.filename = filename;
+
+        sampler.send(Master, 1)
+        if (callback) {
+          callback()
+        }
+      }, function(e) {
+        console.log("Error with decoding audio data" + e.err)
+      })
+    }
+
+    // freesound query api http://www.freesound.org/docs/api/resources.html
+    if (typeof key === 'string') {
+      var query = key;
+      Gibber.log('searching freesound for ' + query)
+      // textSearch: function(query, options, success, error){ 
+        // search: function(query, page, filter, sort, num_results, fields, sounds_per_page, success, error
+      //freesound.search(query, /*page*/ 0, 'duration:[0.0 TO 10.0]', 'rating_desc', null, null, null,
+      freesound.textSearch( query, { page:1 },// page:0, filter: 'duration:[0.0 TO 10.0]', sort:'rating_desc' }, 
+        function(sounds) {
+          console.log("SOUNDS", typeof sounds, sounds )
+          sounds = JSON.parse( sounds )
+          filename = sounds.results[0].name
+          var id = sounds.results[0].id
+
+          if (typeof Freesound.loaded[filename] === 'undefined') {
+            var request = new XMLHttpRequest();
+            //Gibber.log("now downloading " + filename + ", " + sounds.sounds[0].duration + " seconds in length")
+            // https://www.freesound.org/apiv2/sounds/110011/download/
+            request.open('GET', 'https://www.freesound.org/apiv2/sounds/'+ id + '/download', true) //"?&api_key=" + freesound.apiKey, true);
+            request.responseType = 'arraybuffer';
+            //request.withCredentials = true;
+            request.onload = function( v ) {
+              console.log("WOO HOO", v )
+              onload(request)
+            };
+            request.send();
+            freesound.getSound( id, function( val ){ console.log( val ) }, null )
+          } else {
+            sampler.buffer = Freesound.loaded[filename];
+            sampler.filename = filename;
+            sampler.bufferLength = sampler.buffer.length;
+            sampler.isLoaded = true;
+            sampler.end = sampler.bufferLength;
+            sampler.setBuffer(sampler.buffer);
+            sampler.setPhase(sampler.bufferLength);
+
+            sampler.send(Master, 1)
+            if (callback) {
+              callback()
+            }
+          }
+        }, function() {
+          displayError("Error while searching...")
+        }
+      );
+    } else if (typeof key === 'object') {
+      var query = key.query,
+        filter = key.filter || "",
+        sort = key.sort || 'rating_desc',
+        page = key.page || 0;
+      pick = key.pick || 0;
+
+      Gibber.log('searching freesound for ' + query)
+
+      filter += ' duration:[0.0 TO 10.0]'
+      freesound.search(query, page, filter, sort, null, null, null,
+        function(sounds) {
+          if (sounds.num_results > 0) {
+            var num = 0;
+
+            if (typeof key.pick === 'number') {
+              num = key.pick
+            } else if (typeof key.pick === 'function') {
+              num = key.pick();
+            } else if (key.pick === 'random') {
+              num = rndi(0, sounds.sounds.length);
+            }
+
+            filename = sounds.sounds[num].original_filename
+
+            if (typeof Freesound.loaded[filename] === 'undefined') {
+              request = new XMLHttpRequest();
+              Gibber.log("now downloading " + filename + ", " + sounds.sounds[num].duration + " seconds in length")
+              request.open('GET', sounds.sounds[num].serve + "?&api_key=" + freesound.apiKey, true);
+              request.responseType = 'arraybuffer';
+              request.onload = function() {
+                onload(request)
+              };
+              request.send();
+            } else {
+              Gibber.log('using exising loaded sample ' + filename)
+              sampler.buffer = Freesound.loaded[filename];
+              sampler.bufferLength = sampler.buffer.length;
+              sampler.isLoaded = true;
+              sampler.end = sampler.bufferLength;
+              sampler.setBuffer(sampler.buffer);
+              sampler.setPhase(sampler.bufferLength);
+
+              sampler.send(Master, 1)
+              if (callback) {
+                callback()
+              }
+            }
+          } else {
+            Gibber.log("No Freesound files matched your query.")
+          }
+        }, function() {
+          console.log("Error while searching...")
+        }
+      );
+    } else if (typeof key === 'number') {
+      Gibber.log('downloading sound #' + key + ' from freesound.org')
+      freesound.get_sound(key,
+        function(sound) {
+          request = new XMLHttpRequest();
+          filename = sound.original_filename
+          request.open('GET', sound.serve + "?api_key=" + freesound.apiKey, true);
+          request.responseType = 'arraybuffer';
+          request.onload = function() {
+            onload(request)
+          };
+          request.send();
+        }
+      )
+    }
+    return sampler;
+  }
+  Freesound.loaded = {};
+
+  return Freesound
+}
+},{}],18:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   "use strict"
   
@@ -10283,9 +11469,16 @@ module.exports = function( Gibber ) {
   Oscillators.Grains = function() {
     var props = typeof arguments[0] === 'object' ? arguments[0] : arguments[1],
         bufferLength = props.bufferLength || 88200,
-        a = Sampler().record( props.input, bufferLength ),
+        a,
+        //a/ = Sampler().record( props.input, bufferLength ),
         oscillator
-  
+    
+    if( props.input ) {
+      a = Sampler().record( props.input, bufferLength )
+    }else if( props.buffer ) {
+      bufferLength = props.buffer.length
+    }
+    
     if(typeof arguments[0] === 'string') {
       var preset = Gibber.Presets.Grains[ arguments[0] ]
       if( typeof props !== 'undefined') $.extend( preset, props )
@@ -10308,15 +11501,22 @@ module.exports = function( Gibber ) {
   		if(shouldLoop === false) {
   			future( function() { mappingObject.position = curPos }, Gibber.Clock.time( time ) );
   		}
+      
+      return oscillator
   	}
-
-    future( function() {
-  	  oscillator.setBuffer( a.getBuffer() );
-      oscillator.connect()
-  	  oscillator.loop( 0, 1, bufferLength ); // min looping automatically
     
-      a.disconnect()
-    }, bufferLength + 1)
+    if( a ){
+      future( function() {
+    	  oscillator.setBuffer( a.getBuffer() );
+        oscillator.connect()
+    	  oscillator.loop( 0, 1, bufferLength ); // min looping automatically
+    
+        a.disconnect()
+      }, bufferLength + 1)
+    }else{
+      oscillator.connect()
+      oscillator.loop( 0, 1, bufferLength );
+    }
     
     oscillator.type = 'Gen'
 
@@ -10369,50 +11569,81 @@ module.exports = function( Gibber ) {
   
   return Oscillators
 }
-},{"gibberish-dsp":1}],15:[function(_dereq_,module,exports){
+},{"gibberish-dsp":1}],19:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   "use strict";
+  var loadBuffer = function(ctx, filename, callback) {
+    var request = new XMLHttpRequest();
+    request.open("GET", filename, true);
+    request.responseType = "arraybuffer";
+    request.onload = function() {
+      Gibberish.context.decodeAudioData( request.response, function(_buffer) {
+        callback( _buffer )
+      }) 
+    };
+    request.send();
+  }
   
-  var PostProcessing,
-      Gibberish = _dereq_( 'gibberish-dsp' ),
-      compressor = null, 
+  var compressor = null, 
+      Gibberish,
       end = null,
       hishelf = null,
       lowshelf = null,
       postgraph = null,
-      init = function() {
-        postgraph = [ Gibberish.node, Gibberish.context.destination ]
-      },
-      disconnectGraph = function() {
-        for( var i = 0; i < postgraph.length - 1; i++ ) {
-          postgraph[ i ].disconnect( postgraph[ i + 1 ] )
-        }
-      },
-      connectGraph = function() {
-        for( var i = 0; i < postgraph.length - 1; i++ ) {
-          postgraph[ i ].connect( postgraph[ i + 1 ] )
-        }
-      },
-      insert = function( node, position ) { 
-        if( typeof position !== 'undefined' ) {
-          if( position > 0 && position < postgraph.length - 1 ) {
-            disconnectGraph()
-            postgraph.splice( position, 0, node )
-          }else{
-            console.error( 'Invalid position for inserting into postprocessing graph: ', position )
-            return
-          }
-        }else{
-          disconnectGraph()
-          postgraph.splice( 1, 0, node )
-        }
-      
-        connectGraph()
-      };
+      masterverb = null;
   
-  var PP = PostProcessing = {
+  var PP = Gibber.AudioPostProcessing = {
+    initialized: false,    
+    getPostgraph : function() { return postgraph },
+
+    init : function() {
+      if( !this.initialized ) {
+        Gibberish = Gibber.Audio.Core
+        postgraph = [ Gibberish.node, Gibberish.context.destination ]
+        this.initialized = true
+        $.subscribe( '/gibber/clear', PP.clear.bind( this ) )
+      }
+    },
+    
+    clear : function() {
+      this.disconnectGraph()
+      postgraph = [ Gibberish.node, Gibberish.context.destination ]
+      this.connectGraph()
+    },
+    
+    disconnectGraph: function() {
+      for( var i = 0; i < postgraph.length - 1; i++ ) {
+        postgraph[ i ].disconnect( postgraph[ i + 1 ] )
+      }
+    },
+    
+    connectGraph : function() {
+      for( var i = 0; i < postgraph.length - 1; i++ ) {
+        postgraph[ i ].connect( postgraph[ i + 1 ] )
+      }
+    },
+    
+    insert: function( node, position ) { 
+      if( typeof position !== 'undefined' ) {
+        if( position > 0 && position < postgraph.length - 1 ) {
+          PP.disconnectGraph()
+          postgraph.splice( position, 0, node )
+        }else{
+          console.error( 'Invalid position for inserting into postprocessing graph: ', position )
+          return
+        }
+      }else{
+        PP.disconnectGraph()
+        postgraph.splice( 1, 0, node )
+      }
+      
+      PP.connectGraph()
+    },
+    
     Compressor : function( position ) {
       if( compressor === null ) {
+        
+        PP.init()
         
         compressor = Gibberish.context.createDynamicsCompressor()
         
@@ -10444,6 +11675,48 @@ module.exports = function( Gibber ) {
       }
       
       return compressor
+    },
+    
+    MasterVerb: function( verb ) {
+      if( masterverb === null ) {
+        if( typeof verb === 'undefined' ) verb = 'smallPlate'
+        
+        masterverb = Gibberish.context.createConvolver();
+        masterverb.impulseName = verb
+        
+        loadBuffer( Gibberish.context, 'resources/impulses/' + verb + '.wav', function( _buffer ) {
+          masterverb.buffer = _buffer
+        })
+        
+        //postgraph[ 0 ].connect( masterverb, 2, 0 )
+        //postgraph[ 0 ].connect( masterverb, 3, 1 )        
+        
+        Gibberish.reverbOut.connect( masterverb )
+        
+        masterverb.gainNode = Gibberish.context.createGain()
+        
+        masterverb.gainNode.connect( Gibberish.context.destination )
+        masterverb.connect( masterverb.gainNode )
+        
+        Object.defineProperty( masterverb, 'gain', {
+          get: function() { 
+            return masterverb.gainNode.gain.value
+          },
+          set: function(v) {
+            masterverb.gainNode.gain.value = v
+          }
+        })
+        
+        masterverb.gain = .2
+        //175314__recordinghopkins__large-dark-plate-01.wav
+      }else if( verb !== masterverb.impulseName ) {
+        loadBuffer( Gibberish.context, 'resources/impulses/' + verb + '.wav', function( _buffer ) {
+          masterverb.impulseName = verb
+          masterverb.buffer = _buffer
+        })
+      }
+      
+      return masterverb
     },
     
     LowShelf : function( position ) {
@@ -10480,7 +11753,7 @@ module.exports = function( Gibber ) {
       
       return lowshelf
     },
-    
+     
     HiShelf : function( position ) {
       if( hishelf === null ) {
         hishelf = Gibberish.context.createBiquadFilter()
@@ -10515,11 +11788,10 @@ module.exports = function( Gibber ) {
       return hishelf
     },
   }
-
-  return PostProcessing
-
+  
+  return PP
 }
-},{"gibberish-dsp":1}],16:[function(_dereq_,module,exports){
+},{}],20:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) { 
   "use strict"
   
@@ -10575,9 +11847,15 @@ module.exports = function( Gibber ) {
   Samplers.Sampler = function() {
     var args = Array.prototype.slice.call( arguments, 0 ),
         file = args[0] && args[0].file ? args[0].file : undefined,
+        oscillator, buffer, name = 'Sampler'
+        
+      if( args[0] && args[0].buffer ) { buffer = args[0].buffer }
+      if( buffer ) {
+        oscillator = new Gibberish.Sampler({ 'buffer':buffer }).connect( Gibber.Master )
+      }else{
         oscillator = new Gibberish.Sampler( file ).connect( Gibber.Master )
-        name = 'Sampler'
-         
+      }
+
       oscillator.type = 'Gen'
       $.extend( true, oscillator, Gibber.Audio.ugenTemplate )
       
@@ -10602,10 +11880,9 @@ module.exports = function( Gibber ) {
         }
       }
 
-
       var oldStart = oscillator.__lookupSetter__('start').bind( oscillator ),
           __start = 0
-          
+      
       Object.defineProperty(oscillator, 'start', {
         configurable: true,
         get: function() { 
@@ -10613,11 +11890,12 @@ module.exports = function( Gibber ) {
         },
         set: function(v) {
           if( v <= 1 ) {
-            __start = v * oscillator.bufferLength
+            __start = v * oscillator.length
           }else{
             __start = v
           }
           oldStart( __start )
+          oscillator.setPhase( __start ) // TODO: HACK! Why doesn't this work automatically?
           
           return __start
         }
@@ -10632,11 +11910,12 @@ module.exports = function( Gibber ) {
         },
         set: function(v) {
           if( v <= 1 ) {
-            __end = v * oscillator.bufferLength
+            __end = v * oscillator.length
           }else{
             __end = v
           }
           oldEnd( __end )
+          oscillator.setPhase( __end ) // TODO: HACK! Why doesn't this work automatically?
           
           return __end
         }
@@ -10644,7 +11923,7 @@ module.exports = function( Gibber ) {
       
       Gibber.createProxyProperties( oscillator, mappingProperties )
 
-      var proxyMethods = [ 'note', 'pickBuffer' ]
+      var proxyMethods = [ 'note', 'pickBuffer', 'switchBuffer' ]
       
       Gibber.createProxyMethods( oscillator, proxyMethods )
 
@@ -10695,7 +11974,7 @@ module.exports = function( Gibber ) {
             reader = new FileReader(),
             that = _that, item;
         
-        item = file.webkitGetAsEntry()
+        item = file.webkitGetAsEntry ? file.webkitGetAsEntry() : file
         
         if( item.isDirectory ) {
           var dirReader = item.createReader()
@@ -10733,6 +12012,81 @@ module.exports = function( Gibber ) {
     return this;
   };
   
+  Gibberish.Sampler.prototype.done = function( func ) {
+    this.onload =  func
+    return this
+  }
+  
+  Gibberish.Sampler.prototype.load = function( url ) {
+    var xhr = new XMLHttpRequest(), initSound
+        
+    xhr.open( 'GET', url, true )
+    xhr.responseType = 'arraybuffer'
+    xhr.onload = function( e ) { initSound( this.response, url ) }
+    xhr.send()
+    
+    console.log("now loading sample", url )
+    xhr.onerror = function( e ) { console.error( "Sampler file loading error", e )}
+    
+    var self = this, buffer, bufferLength = 0, phase = 0
+        
+    function initSound( arrayBuffer, filename ) {
+      Gibber.Audio.Core.context.decodeAudioData( arrayBuffer, function( _buffer ) {
+        var buffer = _buffer.getChannelData(0)
+  			self.length = self.end = buffer.length
+        self.setPhase( self.end )
+        self.setBuffer( buffer )
+        self.isPlaying = true;
+  			self.buffers[ filename ] = buffer;
+        this.file = filename
+
+  			console.log("sample loaded | ", filename, " | length | ", buffer.length );
+  			Gibberish.audioFiles[ filename ] = buffer;
+			
+        if(self.onload) self.onload();
+      
+        if(self.playOnLoad !== 0) self.note( self.playOnLoad );
+      
+  			self.isLoaded = true;
+      }, function(e) {
+        console.log('Error decoding file', e);
+      }); 
+    };
+    
+    return this
+  }
+  
+  Gibberish.Sampler.prototype.loadDir = function( dir ) {
+    var xhr = new XMLHttpRequest(), initSound
+        
+    xhr.open( 'GET', dir, true )
+    xhr.responseType = 'html'
+    xhr.onload = function( e ) { loadDir( this.response, dir ) }
+    xhr.send()
+    
+    console.log("now loading directory", dir )
+    xhr.onerror = function( e ) { console.error( "Error loading directory", e )}
+    
+    var self = this
+        
+    function loadDir( response, dir ) {       
+        var page = $( response ),
+            links = $( page ).find( 'a' )
+        
+        for( var i = 0; i < links.length; i++ ) {
+          var link = links[ i ],
+              split = link.href.split( '/' ),
+              url   = split[ split.length - 1 ]
+              
+          if( url !== '' && url !== '.DS_Store' && url !== 'node-ecstatic' ) {
+            self.load( dir + '/' + url )
+          }
+        }
+    };
+    
+    return this
+  }
+  
 
   Samplers.Looper = function(input, length, numberOfLoops) {
   	var that = Bus();
@@ -10747,10 +12101,10 @@ module.exports = function( Gibber ) {
         that.children[ that.currentLoop ].record( that.input, that.length );
     
         var seq = {
-          target: that.children[ that.currentLoop],
+          target: that.children[ that.currentLoop ],
           durations: that.length,
           key:'note',
-          values: [ null ] 
+          values: [ 1 ] 
         }
 
         that.seq.add( seq )
@@ -10769,7 +12123,7 @@ module.exports = function( Gibber ) {
           target: that.children[ that.currentLoop ],
           durations: that.length,
           key:'note',
-          values: [ null ] 
+          values: [ 1 ] 
         }
 
         that.seq.add( seq )
@@ -10798,14 +12152,343 @@ module.exports = function( Gibber ) {
     Gibber.createProxyProperties( that, { pitch:mappingProperties.pitch } )
         
     that.stop = function() { that.seq.stop(); }
-    that.play = function() { that.seq.play(); }
+    that.play = function() { that.seq.start(); }
 	
   	return that;
   }
   
   return Samplers
 }
-},{"./clock":9,"gibberish-dsp":1}],17:[function(_dereq_,module,exports){
+},{"./clock":11,"gibberish-dsp":1}],21:[function(_dereq_,module,exports){
+/*
+Score is a Seq(ish) object, with pause, start / stop, rewind, fast-forward.
+It's internal phase is 
+
+Score has start() method to start it running. next() advances to next element,
+regardless of whether or not the score is running, and stats the transport running.
+rewind() moves the score index to the first position.
+*/
+
+/*
+Passed Timing           Result
+=============           ======
+Numeric literal         place function in timeline and store reference
+a Function              callback. register to receive and advance. must use pub/sub.
+Score.wait             pause until next() method is called
+*/
+
+module.exports = function( Gibber ) {
+
+"use strict"
+
+var Gibberish = _dereq_( 'gibberish-dsp' ),
+    $ = Gibber.dollar
+
+var ScoreProto = {
+  start: function() { 
+    if( !this.codeblock ) {
+      this.connect()
+    }
+    this.isPaused = false
+  
+    return this
+  },
+  stop:  function() { 
+    this.isPaused = true  
+    return this
+  },
+  
+  loop: function( loopPause ) {
+    this.loopPause = loopPause || 0
+    this.shouldLoop = !this.shouldLoop
+    
+    return this
+  },
+  
+  pause: function() {
+    this.isPaused = true
+    
+    return this
+  },
+  
+  next: function() {
+    if( !this.codeblock ) {
+      this.connect()
+    }
+    this.isPaused = false
+    
+    return this
+  },
+}
+
+var proto = new Gibberish.ugen()
+
+$.extend( proto, ScoreProto )
+
+var Score = function( data, opts ) {
+  if( ! ( this instanceof Score ) ) {
+    var args = Array.prototype.slice.call( arguments, 0 )
+    return Gibber.construct( Score, args )
+  }
+  
+  if( typeof opts === 'undefined' ) opts = {}
+  
+  this.timeline = []
+  this.schedule = []
+  this.shouldLoop = false
+  this.loopPause = 0
+  
+  for( var i = 0; i < data.length; i+=2 ) {
+    this.schedule.push( data[ i ] )
+    this.timeline.push( data[ i+1 ] )    
+  }
+  
+  var phase = 0, 
+      index = 0,
+      timeline = this.timeline,
+      schedule = this.schedule,
+      self = this,
+      loopPauseFnc = function() {
+        self.nextTime = phase = 0
+        index = -1
+        self.timeline.pop()
+      }
+      
+  $.extend( this, {
+    properties: { rate: 1, isPaused:true, nextTime:0  },
+    name:'score',
+    getIndex: function() { return index },
+    callback : function( rate, isPaused, nextTime ) {
+      if( !isPaused ) {
+        if( phase >= nextTime && index < timeline.length ) {
+          
+          var fnc = timeline[ index ],
+              shouldExecute = true
+                    
+          index++
+          
+          if( index <= timeline.length - 1 ) {
+            var time = schedule[ index ]
+            
+            if( typeof time === 'number' && time !== Score.wait ) {
+              self.nextTime = phase + time
+            }else{
+              if( time === Score.wait ) {
+                self.isPaused = true
+              }else if( time.owner instanceof Score ) {
+                self.isPaused = true
+                time.owner.oncomplete.listeners.push( self )
+                // shouldExecute = false // doesn't do what I think it should do... 
+              }
+            }
+          }else{
+            if( self.shouldLoop ) {
+              if( timeline[ timeline.length - 1 ] !== loopPauseFnc ) {
+                timeline.push( loopPauseFnc )
+              }
+              self.nextTime = phase + self.loopPause
+            }else{
+              self.isPaused = true
+            }
+            self.oncomplete()
+          }
+          if( shouldExecute && fnc ) {
+            if( fnc instanceof Score ) {
+              if( !fnc.codeblock ) {
+                fnc.start()
+                console.log("STARTING SCORE")
+              }else{
+                fnc.rewind().next()
+                //fnc.rewind().next()
+                //fnc()
+              }
+            }else{
+              fnc()
+            }
+          }
+        }
+        phase += rate
+      }
+      return 0
+    },
+    rewind : function() { 
+      phase = index = 0 
+      this.nextTime = this.schedule[ 0 ]
+      return this
+    },
+    oncomplete: function() {
+      // console.log("ON COMPLETE", this.oncomplete.listeners )
+      var listeners = this.oncomplete.listeners
+      for( var i = listeners.length - 1; i >= 0; i-- ) {
+        var listener = listeners[i]
+        if( listener instanceof Score ) {
+          listener.next()
+        }
+      }
+    }
+  })
+  
+  this.oncomplete.listeners = []
+  this.oncomplete.owner = this
+  
+  this.init()
+  
+  this.nextTime = this.schedule[ 0 ]
+  
+  var _rate = this.rate,
+      oldRate  = this.__lookupSetter__( 'rate' )
+   
+  Object.defineProperty( this, 'rate', {
+    get : function() { return _rate },
+    set : function(v) {
+      _rate = Mul( Gibber.Clock, v )
+      oldRate.call( this, _rate )
+    }
+  })
+  
+  this.rate = this.rate // trigger meta-programming tie to master clock
+  
+  Gibber.createProxyProperties( this, {
+    rate : { min: .1, max: 2, output: 0, timescale: 'audio' },
+  })
+}
+
+Score.prototype = proto
+
+Score.wait = -987654321
+Score.combine = function() {
+  var score = [ 0, arguments[ 0 ] ]
+  
+  for( var i = 1; i < arguments.length; i++ ) {
+    var timeIndex = i * 2,
+        valueIndex = timeIndex +  1,
+        previousValueIndex = timeIndex - 1
+
+    score[ timeIndex  ] = score[ previousValueIndex ].oncomplete
+    score[ valueIndex ] = arguments[ i ]
+  }
+  
+  return Score( score )
+}
+
+return Score
+
+}
+
+/*
+a = Score([
+  0, console.log.bind( null, 'test1'),
+  seconds(.5),console.log.bind( null, 'test2'),
+  Score.wait, null,
+  seconds(.5),console.log.bind( null, 'test3'),
+  seconds(.5),console.log.bind( null, 'test4'),
+  seconds(.5),function() { a.rewind(); a.next() }
+])
+
+b = Score([
+  100, console.log.bind(null,"B"),
+  100, console.log.bind(null,"F"),  
+  a.oncomplete, function() {
+  	console.log("C")
+  }
+])
+.start()
+
+a.start()
+
+-----
+a = Score([
+  0, console.log.bind( null, 'test1'),
+  seconds(.5),console.log.bind( null, 'test2'),
+  
+  Score.wait, null,
+  
+  seconds(.5),console.log.bind( null, 'test3'),
+  
+  seconds(.5), Score([
+    0, console.log.bind(null,"A"),
+    beats(2), console.log.bind(null,"B")
+  ]),
+  
+  Score.wait, null,
+  
+  seconds(.5),function() { a.rewind(); a.next() }
+]).start()
+
+-----
+synth = Synth('bleep')
+synth2 = Synth('bleep', {maxVoices:4})
+
+// you need to uncomment the line below after the kick drum comes in
+// and execute it
+
+score.next()
+
+score = Score([
+  0, synth.note.score( 'c4', 1/4 ),
+  
+  measures(1), synth.note.score( ['c4','c5'], 1/8 ),
+  
+  measures(1), synth.note.score( ['c2','c3','c4','c5'], 1/16 ),
+  
+  measures(1), function() {
+    kick = Kick().note.seq( 55,1/4 )
+  },
+  
+  Score.wait, null,
+  
+  0, synth2.note.score('bb4',1/4 ),
+  
+  measures(1), synth2.chord.score( [['bb4','g4']], 1/4 ),
+  
+  measures(2), synth2.chord.score( [['c5','f4']], 1/4 ),
+  
+  measures(2), function() {
+    synth2.chord.seq( [['eb4','bb4','d5']], 1/6 )
+    synth2.note.seq.stop()
+    synth2.fx.add( Delay(1/9,.35) )
+    
+    synth2.fadeOut(32)
+  },
+  
+  measures(4), function() {
+    ks = Pluck()
+    	.note.seq( Rndi(100,600), 1/16 )
+    	.blend.seq( Rndf() )
+    	.fx.add( Schizo('paranoid') )
+    
+    Clock.rate = Line( 1, 1.1, 8 )
+  },
+  
+  measures(8), function() {
+		Master.fadeOut( 8 )
+  },
+  
+  measures(8), Gibber.clear
+  
+]).start()
+
+------
+
+synth = Synth('bleep')
+
+verse =  Score([ beats(1/2), synth.note.bind( synth, 'c4' ) ])
+chorus = Score([ beats(1/2), synth.note.bind( synth, 'd4' ) ])
+bridge = Score([ beats(1/2), synth.note.bind( synth, 'e4' ) ])
+
+song = Score([
+  0,                 verse,
+  verse.oncomplete,  chorus,
+  chorus.oncomplete, verse,
+  verse.oncomplete,  chorus,
+  chorus.oncomplete, bridge,
+  bridge.oncomplete, chorus  
+])
+
+song.start()
+
+*/
+},{"gibberish-dsp":1}],22:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   //"use strict"
   
@@ -10933,6 +12616,38 @@ module.exports = function( Gibber ) {
             
             _seq.values = valuesPattern
             
+            _seq.stop = function() { _seq.shouldStop = true } 
+    
+            // TODO: property specific stop/start/shuffle etc. for polyseq
+            _seq.start = function() {
+              _seq.shouldStop = false
+              seq.timeline[0] = [ _seq ]                
+              seq.nextTime = 0
+      
+              if( !seq.isRunning ) { 
+                seq.start( false, priority )
+              }
+            }
+    
+            _seq.repeat = function( numberOfTimes ) {
+              var repeatCount = 0
+      
+              var filter = function( args, ptrn ) {
+                if( args[2] % (ptrn.getLength() - 1) === 0 && args[2] !== 0) {
+                  repeatCount++
+                  if( repeatCount === numberOfTimes ) {
+                    ptrn.seq.stop()
+                  }
+                }
+                return args
+              }
+      
+              valuesPattern.filters.push( filter )
+            }
+            
+            valuesPattern.seq = _seq
+            //durationsPattern.seq = _seq 
+            
             obj.seqs.push( _seq )
             keyList.push( key )
           }
@@ -10978,7 +12693,9 @@ module.exports = function( Gibber ) {
         values: Array.isArray( arguments[0] ) ? arguments[0] : [ arguments[ 0 ] ],
         durations: Gibber.Clock.time( arguments[ 1 ] )
       }]
-            
+      if( typeof arguments[1] === 'function' || Array.isArray( arguments[1] ) ) {
+        obj.seqs[0].durations = arguments[ 1  ]
+      }
       keyList.push('functions')
     }
       
@@ -11061,6 +12778,8 @@ module.exports = function( Gibber ) {
       
           console.log("SEQ KILL", this )
         this.stop().disconnect()
+        
+        Seq.children.splice( Seq.children.indexOf( this ), 1 )
       },
       applyScale : function() {
         // for( var i = 0; i < this.seqs.length; i++ ) {
@@ -11084,11 +12803,25 @@ module.exports = function( Gibber ) {
           this.seqs[ i ].values[0].shuffle()
         }
       },
+      // repeat : function( numberOfTimes ) { 
+      //   var repeatCount = 0
+      //   
+      //   var filter = function( args, ptrn ) {
+      //     if( args[2] % (ptrn.getLength() - 1) === 0 && args[2] !== 0) {
+      //       ptrn.seq.stop()
+      //     }
+      //     return args
+      //   }
+      //   
+      // }
     })
+    
+    Seq.children.push( seq )
+    
     return seq
   }
   
-
+  Seq.children = []
   
   var ScaleSeq = function() {
     var args = arguments[0],
@@ -11110,7 +12843,7 @@ module.exports = function( Gibber ) {
   
   return Seqs 
 }
-},{"gibberish-dsp":1}],18:[function(_dereq_,module,exports){
+},{"gibberish-dsp":1}],23:[function(_dereq_,module,exports){
 module.exports = function( Gibber, pathToSoundFonts ) {
   var Gibberish = _dereq_( 'gibberish-dsp' ),
       curves = Gibber.outputCurves,
@@ -11255,9 +12988,11 @@ module.exports = function( Gibber, pathToSoundFonts ) {
   
   return SoundFont
 }
-},{"./theory":20,"gibberish-dsp":1}],19:[function(_dereq_,module,exports){
+},{"./theory":25,"gibberish-dsp":1}],24:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   "use strict"
+  
+  function isInt(value) { return !isNaN(value) && (function(x) { return (x | 0) === x; })(parseFloat(value)) }
   
   var Synths = { Presets: {} },
       Gibberish = _dereq_( 'gibberish-dsp' ),
@@ -11350,39 +13085,31 @@ module.exports = function( Gibber ) {
           name = Array.isArray( types[ i ] ) ? types[ i ][ 1 ] : types[ i ]
 
       Synths[ name ] = function() {
-        var args = Array.prototype.slice.call(arguments),
+        var args = Array.prototype.slice.call( arguments, 0 ),
             obj,
             mv = 1,
             adsr = false,
             scale,
-            requireReleaseTrigger = false
+            requireReleaseTrigger = false,
+            opts = {},
+            optionsNum = typeof args[0] === 'string' ? 1 : 0
         
-        if( typeof args[0] === 'object' ) {
-          if(typeof args[0].maxVoices !== 'undefined') { 
-            if( args[0].maxVoices ) mv = args[0].maxVoices
+        Gibber.processArguments2( opts, args, name )
+        
+        for( var key in opts ) {
+          if( Gibber.Audio.Clock.timeProperties.indexOf( key ) > -1 ) {
+            opts[ key ] = Gibber.Clock.time( opts[key] )
           }
-          if( typeof args[0].useADSR !== 'undefined' ) {
-            adsr = args[0].useADSR
-            if( typeof args[0].requireReleaseTrigger !== 'undefined' ) {
-              requireReleaseTrigger = args[0].requireReleaseTrigger
-            }
-          }else{
-            requireReleaseTrigger = false
-          }
-          if( typeof args[0].useADSR !== 'undefined' ) {
-            adsr = args[0].useADSR
-          }
-          if( typeof args[0].scale !== 'undefined' ) {
-            scale = args[0].scale
-          } 
         }
         
-        obj = new Gibberish[ type ]({ maxVoices: mv, useADSR:adsr, requireReleaseTrigger:requireReleaseTrigger, scale:scale }).connect( Gibber.Master )
+        obj = new Gibberish[ type ]( opts ).connect( Gibber.Master )
         obj.type = 'Gen'
         
         $.extend( true, obj, Gibber.Audio.ugenTemplate )
-        
+
         obj.fx.ugen = obj
+        
+        //Gibber.processArguments2( obj, args, name )        
         
         if( name === 'Vocoder' ) return obj
         
@@ -11401,7 +13128,9 @@ module.exports = function( Gibber ) {
                   this.frequency = _frequency
                 }
               }
-        
+              
+              this.lastFrequency = this.frequency
+              
               if( obj.envelope.getState() > 0 ) obj.envelope.run();
             }
           }
@@ -11411,36 +13140,14 @@ module.exports = function( Gibber ) {
         obj.note = function() {
           var args = Array.prototype.splice.call( arguments, 0 )
           
-          if( typeof args[0] === 'string' ) {
-            args[0] = Gibber.Theory.Teoria.note( args[0] ).fq()
-          }else{
-            // TODO: Differentiate between envelopes etc. and interface elements
-            // if( typeof args[0] === 'object' ) { // for interface elements etc.
-            //   args[0] = args[0].valueOf()
-            // }
-            if( args[0] < Gibber.minNoteFrequency ) {
-              var scale = obj.scale || Gibber.scale,
-                  note  = scale.notes[ args[ 0 ] ]
-                  
-              if( obj.octave && obj.octave !== 0 ) {
-                var sign = obj.octave > 0 ? 1 : 0,
-                    num  = Math.abs( obj.octave )
-                
-                for( var i = 0; i < num; i++ ) {
-                  note *= sign ? 2 : .5
-                }
-              }
-              
-              args[ 0 ] = note
-            }
-          }
+          args[ 0 ] = Gibber.Theory.processFrequency( obj, args[ 0 ] )
           
           this._note.apply( this, args )
           
           return this 
         }
         
-        obj.chord = Gibber.Theory.chord
+        obj.chord = Gibber.Theory.chord.bind( obj )
       
         Object.defineProperty(obj, '_', {
           get: function() { obj.kill(); return obj },
@@ -11450,13 +13157,18 @@ module.exports = function( Gibber ) {
         //obj, _key, shouldSeq, shouldRamp, dict, _useMappings, priority
         Gibber.createProxyProperties( obj, _mappingProperties[ name ] )
         
-        Gibber.createProxyMethods( obj, [ 'note', 'chord', 'send' ] )
+        obj.trig = function() {
+          this.note( this.lastFrequency )
+        }
+        
+        Gibber.createProxyMethods( obj, [ 'note', 'chord', 'send', 'trig' ] )
                 
         obj.name = name 
         
+
         //console.log( "PROCESS", args, _mappingProperties[ name ] )
         
-        Gibber.processArguments2( obj, args, obj.name )
+        //Gibber.processArguments2( obj, args, obj.name )
         
         obj.toString = function() { return name }
         
@@ -11493,6 +13205,7 @@ module.exports = function( Gibber ) {
           }
         })
         
+        if( obj.presetInit ) obj.presetInit() 
         return obj
       }
     })()
@@ -11502,6 +13215,7 @@ module.exports = function( Gibber ) {
   Synths.Presets.Synth = {
   	short:  { attack: 44, decay: 1/16, },
   	bleep:  { waveform:'Sine', attack:44, decay:1/16 },
+    bleepEcho: { waveform:'Sine', attack:44, decay:1/16, presetInit:function() { this.fx.add( Delay(1/6,.85 ) ) } },
     cascade: { waveform:'Sine', maxVoices:10, attack:Clock.maxMeasures, decay:Clock.beats(1/32),
       presetInit: function() { 
         this.fx.add( Gibber.Audio.FX.Delay(1/9,.2), Gibber.Audio.FX.Flanger() )
@@ -11544,12 +13258,7 @@ module.exports = function( Gibber ) {
 
   	winsome : {
   		presetInit : function() { 
-        //this.fx.add( Delay(1/4, .35), Reverb() ) 
-        this.lfo = Gibber.Audio.Oscillators.Sine( .234375 )._
-        
-        this.lfo.amp = .075
-        this.lfo.frequency = 2
-        
+        this.lfo = Gibber.Audio.Oscillators.Sine( 2, .075 )._
         this.cutoff = this.lfo
         this.detune2 = this.lfo
       },
@@ -11576,6 +13285,22 @@ module.exports = function( Gibber ) {
   		filterMult:.2,
   		resonance:1,
       amp:.65
+    },
+    
+    edgy: {
+      presetInit: function() {
+        this.decay = 1/8
+        this.attack = ms(1)
+      },
+      octave: -2,
+  		octave2 : -1,
+  		cutoff: .5,
+  		filterMult:.2,
+      resonance:1, 
+      waveform:'PWM', 
+      pulsewidth:.2,
+      detune2:0,
+      amp:.2,
     },
   
   	easy : {
@@ -11711,12 +13436,13 @@ module.exports = function( Gibber ) {
 
 }
 
-},{"./clock":9,"gibberish-dsp":1}],20:[function(_dereq_,module,exports){
+},{"./clock":11,"gibberish-dsp":1}],25:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   "use strict"
 
 var teoria = _dereq_('../../external/teoria.min'),
-    $ = Gibber.dollar
+    $ = Gibber.dollar,
+    isInt = function(value) { return !isNaN(value) && (function(x) { return (x | 0) === x; })(parseFloat(value)) }
 
 var Theory = {
   Teoria: teoria,
@@ -11730,6 +13456,8 @@ var Theory = {
   			var _chord = [];
   			_offset = _offset || 0;
 			  
+        console.log("CHORD", _notes, this )
+        
   			for(var i = 0; i < _notes.length; i++) {
   				_chord.push( this.notes[ _notes[i] + _offset ] );
   			}
@@ -11797,6 +13525,7 @@ var Theory = {
     // obj, _key, shouldSeq, shouldRamp, dict, _useMappings, priority
     
     that.gibber = true // needed since createProxyProperties isn't called where this is normally set
+                              // obj, _key, shouldSeq, shouldRamp, dict, _useMappings, priority
     Gibber.createProxyProperty( that, 'root', true, false, null, false, 1 )
     Gibber.createProxyProperty( that, 'mode', true, false, null, false, 1 )
     //Gibber.defineSequencedProperty( that, 'root', 1 )
@@ -11928,6 +13657,40 @@ var Theory = {
     Shruti: function(root) { return Theory.CustomScale( root, [1,256/243,16/15,10/9,9/8,32/27,6/5,5/4,81/64,4/3,27/20,45/32,729/512,3/2,128/81,8/5,5/3,27/16,16/9,9/5,15/8,243/128,2] ); },
   },
   
+  processFrequency: function( obj, frequency ) {
+    var note = frequency
+    if( typeof frequency === 'string' ) {
+      note = Gibber.Theory.Teoria.note( frequency ).fq()
+    }else if( frequency < Gibber.minNoteFrequency ) {
+      var scale = obj.scale || Gibber.scale,
+          noteValue = frequency,
+          isNoteInteger = isInt( noteValue ),
+          note
+      
+      if( isNoteInteger ) {                      
+        note  = scale.notes[ frequency  ]
+      }else{
+        var noteFloor = scale.notes[ Math.floor( args[ 0 ] )  ],
+            noteCeil  = scale.notes[ Math.ceil( args[ 0 ] )  ],
+            float = args[0] % 1,
+            diff = noteCeil - noteFloor
+        
+        note = noteFloor + float * diff
+      }
+          
+      if( obj.octave && obj.octave !== 0 ) {
+        var sign = obj.octave > 0 ? 1 : 0,
+            num  = Math.abs( obj.octave )
+        
+        for( var i = 0; i < num; i++ ) {
+          note *= sign ? 2 : .5
+        }
+      }
+    }
+    
+    return note
+  },
+  
 	chord : function( val, volume ) {
 		this.notation = val;
 			
@@ -11981,13 +13744,113 @@ var Theory = {
 	
 		return this;
 	}
-
+ 
 }
 
 return Theory
 
 }
-},{"../../external/teoria.min":3}],21:[function(_dereq_,module,exports){
+},{"../../external/teoria.min":4}],26:[function(_dereq_,module,exports){
+module.exports = function( Gibber ) {
+
+var Ugen = function( desc ) {
+  var ctor = function( props ) {
+    var obj = {}
+    $.extend( obj, {
+      properties: $.extend( {}, desc.inputs ),
+      callback: desc.callback.bind( obj ),
+      _init: desc.init.bind( obj ),
+      name: desc.name
+    })
+
+    obj.__proto__ = Gibber.Audio.Core._synth
+    
+    if( typeof props === 'object' ) {
+      for( var key in props ) {
+        obj[ key ] = props[ key ]
+      }
+    }
+    
+    var doNotCopy = ['name','inputs','callback','init'], methods = []
+
+    for( var key in desc ) {
+      if( doNotCopy.indexOf( key ) === -1 ) {
+        obj[ key ] = desc[ key ].bind( obj )
+        methods.push( key )
+      }
+    }
+
+    obj.init.call( obj )
+    obj.oscillatorInit.call( obj )
+
+    Gibber.createProxyProperties( obj, obj.properties )
+    Gibber.createProxyMethods( obj, methods )
+
+    for( var key in desc.inputs ) {
+      if( typeof props === 'object' && props[ key ] ) {
+        obj[ key ] = props[ key ]
+      }else{
+        obj[ key ] = desc.inputs[ key ].default
+      }
+    }  
+
+    obj._init()
+    
+    obj.connect( Gibber.Master )
+	  
+    if( arguments.length > 0 )
+      Gibber.processArguments2( obj, Array.prototype.slice.call( arguments, 0), obj.name )
+  
+    $.extend( true, obj, Gibber.Audio.ugenTemplate )
+    obj.fx.ugen = obj
+  
+    return obj
+  }
+
+  return ctor
+}
+
+return Ugen
+
+}
+
+/*
+
+// create constructor for XXX object using ugen factory
+// this code would be used by end-users to create new ugens
+XXX = Ugen({
+  name:'Vox',
+  inputs:{ 
+    frequency:{ min:50, max:3000, default:440 },
+    amp: { min:0, max:1, default:.1 }
+  },
+  callback: function( frequency, amp ) {
+    this.out = this.sin( this.PI2 * (this.phase++ * frequency / 44100) ) * amp
+    
+    // if stereo, make this.out an array an fill appropriately
+    // do not create a new array for every sample
+    return this.out
+  },
+  init: function() {
+    this.sin = Math.sin
+    this.PI2 = Math.PI * 2
+    this.phase = 0
+    this.out =  0
+  }
+})
+
+// instantiate using constructor
+// frequency and amp are set to arguments
+a = XXX( 330, .25 )
+
+// can also pass dictionary
+b = XXX({ frequency:250, amp:.1 })
+
+// automatic sequencing of properties
+a.frequency.seq( [440,880], 1/2 )
+
+*/
+},{}],27:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   "use strict"
   
@@ -12075,11 +13938,8 @@ module.exports = function( Gibber ) {
     }
 
     Gibber.defineSequencedProperty( robot, 'say' )
-    console.log(0)
     Gibber.defineSequencedProperty( robot, 'chord' )    
-    console.log(1)    
     Gibber.defineSequencedProperty( robot, 'note' )
-    console.log(2)    
     
     $.extend( true, robot, Gibber.Audio.ugenTemplate )
     
@@ -12092,18 +13952,20 @@ module.exports = function( Gibber ) {
   return Vocoder
 }
       
-},{"./clock":9,"gibberish-dsp":1}],22:[function(_dereq_,module,exports){
+},{"./clock":11,"gibberish-dsp":1}],28:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   var Comm = {
     export: function( target ) {
-      target.MIDI = this.MIDI
+      target._MIDI_ = this.MIDI
+      target.OSC = this.OSC
     },
     
-    MIDI: _dereq_( './midi.js')( Gibber )
+    MIDI: _dereq_( './midi.js' )( Gibber ),
+    OSC:  _dereq_( './osc.js' )( Gibber )
   }
   return Comm
 }
-},{"./midi.js":23}],23:[function(_dereq_,module,exports){
+},{"./midi.js":29,"./osc.js":30}],29:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
 
 /* CLOCK
@@ -12447,7 +14309,56 @@ var MIDI = {
 return MIDI
 
 }
-},{}],24:[function(_dereq_,module,exports){
+},{}],30:[function(_dereq_,module,exports){
+module.exports = function( Gibber ) {
+  
+var OSC = Gibber.OSC = {
+  callbacks : {},
+  
+  init : function( port ) {
+    var _port = port || 8080,
+        _socket = OSC.socket = new WebSocket( 'ws://127.0.0.1:' + _port )
+    
+    OSC.socket.onopen = function() { console.log( 'OSC socket opened on port ' + _port + '.' ) }
+    OSC.socket.onmessage = OSC.onmessage;
+  },
+  
+  onmessage : function(msg) {
+    var data
+    try{
+      data = JSON.parse( msg.data )
+    }catch( error ) {
+      console.error( "ERROR on parsing OSC msg", error )
+      return
+    }
+    
+    if( OSC.callbacks[ data.address ] ) {
+      OSC.callbacks[ data.address ]( data.parameters )
+    }else{
+      if( OSC.callbacks[ '*' ] ) {
+        data.parameters.address = data.address
+        OSC.callbacks[ '*' ]( data.parameters )
+      }
+    }
+  },
+  
+  send : function( address, type, params, port, ipAddress ) {
+    var msg = {
+      'address':address,
+      'type': type.split(''),
+      'parameters':params,
+      'port': port,
+      'ipAddress': ipAddress,
+      type:'OSC'
+    }
+    OSC.socket.send( JSON.stringify( msg ) )
+  },
+}
+
+return OSC
+
+}
+},{}],31:[function(_dereq_,module,exports){
 (function (global){
 !function() {
 
@@ -12540,7 +14451,187 @@ module.exports = $
 
 }()
 }).call(this,typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],25:[function(_dereq_,module,exports){
+},{}],32:[function(_dereq_,module,exports){
+module.exports = function( Gibber ) {
+
+"use strict"
+
+var flatten = function(){
+   var flat = [];
+   for (var i = 0, l = this.length; i < l; i++){
+       var type = Object.prototype.toString.call(this[i]).split(' ').pop().split(']').shift().toLowerCase();
+       if (type) { flat = flat.concat(/^(array|collection|arguments|object)$/.test(type) ? flatten.call(this[i]) : this[i]); }
+   }
+   return flat;
+}
+
+var createStartingArray = function( length, ones ) {
+  var out = []
+  for( var i = 0; i < ones; i++ ) {
+    out.push([1])
+  }
+  for( var j = i; j < length; j++ ) {
+    out.push(0)
+  }
+  return out
+}
+
+var printArray = function( array ) {
+  var str = ''
+  for( var i = 0; i < array.length; i++ ) {
+    var outerElement = array[ i ]
+    if( Array.isArray( outerElement ) ) {
+      str += '['
+      for( var j = 0; j < outerElement.length; j++ ) {
+        str += outerElement[ j ]
+      }
+      str += '] '
+    }else{
+      str += outerElement + ''
+    }
+  }
+
+  return str
+}
+
+var arraysEqual = function(a, b) {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  if (a.length != b.length) return false;
+
+  for (var i = 0; i < a.length; ++i) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+var getLargestArrayCount = function( input ) {
+  var length = 0, count = 0
+
+  for( var i = 0; i < input.length; i++ ) {
+    if( Array.isArray( input[ i ] ) ) { 
+      if( input[ i ].length > length ) {
+        length = input[ i ].length
+        count = 1
+      }else if( input[ i ].length === length ) {
+        count++
+      }
+    }
+  }
+
+  return count
+}
+
+var Euclid = function( ones,length, dur ) {
+  var count = 0,
+      out = createStartingArray( length, ones )
+
+ 	function Inner( n,k ) {
+    var operationCount = count++ === 0 ? k : getLargestArrayCount( out ),
+        moveCandidateCount = out.length - operationCount,
+        numberOfMoves = operationCount >= moveCandidateCount ? moveCandidateCount : operationCount
+
+    if( numberOfMoves > 1 || count === 1 ) {
+      for( var i = 0; i < numberOfMoves; i++ ) {
+        var willBeMoved = out.pop(), isArray = Array.isArray( willBeMoved )
+        out[ i ].push( willBeMoved )
+        if( isArray ) { 
+          flatten.call( out[ i ] )
+        }
+      }
+    }
+
+    if( n % k !== 0 ) {
+      return Inner( k, n % k )
+    }else {
+      return flatten.call( out )
+    }
+  }
+
+  return calculateRhythms( Inner( length, ones ), dur )
+}
+// E(5,8) = [ .25, .125, .25, .125, .25 ]
+var calculateRhythms = function( values,dur ) {
+  var out = []
+  
+  console.log( values, dur )
+  if( typeof dur === 'undefined' ) dur = 1 / values.length
+
+  var idx = 0,
+      currentDur = 0
+  
+  while( idx < values.length ) {
+    idx++
+    currentDur += dur
+    
+    if( values[ idx ] == 1 || idx === values.length ) {
+      out.push( currentDur )
+      currentDur = 0
+    } 
+  }
+  
+  return out
+}
+
+var answers = {
+  '1,4' : '1000',
+  '2,3' : '101',
+  '2,5' : '10100',
+  '3,4' : '1011',
+  '3,5' : '10101',
+  '3,7' : '1010100',
+  '3,8' : '10010010',
+  '4,7' : '1010101',
+  '4,9' : '101010100',
+  '4,11': '10010010010',
+  '5,6' : '101111',
+  '5,7' : '1011011',
+  '5,8' : '10110110',
+  '5,9' : '101010101',
+  '5,11': '10101010100',
+  '5,12': '100101001010',
+  '5,16': '1001001001001000',
+  '7,8' : '10111111',
+  '11,24': '100101010101001010101010'
+}
+
+Euclid.test = function( testKey ) {
+  var failed = 0, passed = 0
+
+  if( typeof testKey !== 'string' ) {
+    for( var key in answers ) {
+      var expectedResult = answers[ key ],
+          result = flatten.call( Euclid.apply( null, key.split(',') ) ).join('')
+
+      console.log( result, expectedResult )
+
+      if( result === expectedResult ) {
+        console.log("TEST PASSED", key )
+        passed++
+      }else{
+        console.log("TEST FAILED", key )
+        failed++
+      }
+    }
+    console.log("*****************************TEST RESULTS - Passed: " + passed + ", Failed: " + failed )
+  }else{
+    var expectedResult = answers[testKey],
+				result = flatten.call( Euclid.apply( null, testKey.split(',') ) ).join('')
+
+    console.log( result, expectedResult )
+
+    if( result == expectedResult ) {
+      console.log("TEST PASSED FOR", testKey)
+    }else{
+      console.log("TEST FAILED FOR", testKey)
+    }
+  }
+}
+
+return Euclid
+
+}
+},{}],33:[function(_dereq_,module,exports){
 (function() {
 //"use strict" 
 // can't use strict because eval is used to evaluate user code in the run method
@@ -12562,6 +14653,8 @@ var Gibber = {
   export: function( target ) {
     Gibber.Utilities.export( target )
     target.Pattern = Gibber.Pattern 
+    target.Score = Gibber.Score
+    target.Euclid = Gibber.Euclid
     
     if( Gibber.Audio ) {
       Gibber.Audio.export( target )
@@ -12597,11 +14690,12 @@ var Gibber = {
       
       if( typeof _options === 'object' ) $.extend( options, _options )
       
+      Gibber.Pattern = Gibber.Pattern( Gibber )
       if( Gibber.Audio ) {
         Gibber.Audio.init() 
       
         if( options.globalize ) {
-          options.target.Master = Gibber.Audio.Master    
+          //options.target.Master = Gibber.Audio.Master    
         }else{
           var _export = Gibber.export.bind( Gibber )
           $.extend( Gibber, Gibber.Audio )
@@ -12645,7 +14739,7 @@ var Gibber = {
         Gibber.Environment.SERVER_URL + '/gibber/'+path, {},
         function( d ) {
           d = JSON.parse( d )
-                    
+                              
           var f = new Function( 'return ' + d.text )
           
           Gibber.Modules[ path ] = f()
@@ -12768,7 +14862,7 @@ var Gibber = {
       
         $.extend( obj, preset )
         
-        if( obj.presetInit ) obj.presetInit() 
+        //if( obj.presetInit ) obj.presetInit() 
       }else if( $.isPlainObject( firstArg ) && typeof firstArg.type === 'undefined' ) {
         $.extend( obj, firstArg )
       }else{
@@ -12806,51 +14900,64 @@ var Gibber = {
     
     if( Gibber.Graphics ) Gibber.Graphics.clear( Gibber.Graphics, args )
 
-    Gibber.proxy( window, [ a ] )
+    //Gibber.proxy( window, [ a ] )
+    Gibber.proxy( window )
 		
     $.publish( '/gibber/clear', {} )
         
     console.log( 'Gibber has been cleared.' )
   },
   
+  singleton: function( lt, target ) {
+    if( !target ) target = window 
+    
+    if( $.isArray( lt ) ) {
+      for( var i = 0; i < lt.length; i++ ) {
+        Gibber.singleton( lt[ i ], target )
+      }
+      return
+    }
+    
+    if( typeof target[ lt ] !== 'undefined' ) { //&& arguments[1].indexOf( window[ lt ] ) === -1 ) { 
+      delete target[ lt ] 
+      delete target[ '___' + lt ]
+    }
+
+		var ltr = lt;
+  
+		Object.defineProperty( target, ltr, {
+      configurable: true,
+			get:function() { return target[ '___'+ltr] },
+			set:function( newObj ) {
+        if( newObj ) {
+          if( target[ '___'+ltr ] ) { 
+            if( typeof target[ '___'+ltr ].replaceWith === 'function' ) {
+              target[ '___'+ltr ].replaceWith( newObj )
+              console.log( target[ '___'+ltr ].name + ' was replaced with ' + newObj.name )
+            }
+          }
+          target[ '___'+ltr ] = newObj
+        }else{
+				  if( target[ '___'+ltr ] ) {
+				  	 var variable = target[ '___'+ltr ]
+				  	 if( variable ) {
+				  		 if( typeof variable.kill === 'function' /*&& target[ '___'+ltr ].destinations.length > 0 */) {
+				  			 variable.kill();
+				  		 }
+				  	 }
+				  }
+        }
+      }
+    });
+  },
   proxy: function( target ) {
 		var letters = "abcdefghijklmnopqrstuvwxyz"
     
 		for(var l = 0; l < letters.length; l++) {
-			var lt = letters.charAt(l);
-      if( typeof window[ lt ] !== 'undefined' && arguments[1].indexOf( window[ lt ] ) === -1 ) { 
-        delete window[ lt ] 
-        delete window[ '___' + lt ]
-      }
 
-      (function() {
-				var ltr = lt;
+			var lt = letters.charAt(l);
+      Gibber.singleton( lt, target )
       
-				Object.defineProperty( target, ltr, {
-          configurable: true,
-					get:function() { return target[ '___'+ltr] },
-					set:function( newObj ) {
-            if( newObj ) {
-              if( target[ '___'+ltr ] ) { 
-                if( typeof target[ '___'+ltr ].replaceWith === 'function' ) {
-                  target[ '___'+ltr ].replaceWith( newObj )
-                  console.log( target[ '___'+ltr ].name + ' was replaced with ' + newObj.name )
-                }
-              }
-              target[ '___'+ltr ] = newObj
-            }else{
-						  if( target[ '___'+ltr ] ) {
-						  	 var variable = target[ '___'+ltr ]
-						  	 if( variable ) {
-						  		 if( typeof variable.kill === 'function' /*&& target[ '___'+ltr ].destinations.length > 0 */) {
-						  			 variable.kill();
-						  		 }
-						  	 }
-						  }
-            }
-          }
-        });
-      })();     
     }
   },
 
@@ -12945,28 +15052,42 @@ var Gibber = {
   },
   
   defineSequencedProperty : function( obj, key, priority ) {
-    var fnc = obj[ key ], seq, seqNumber
+    var fnc = obj[ key ], seqNumber, seqNumHash = {}, seqs = {}
 
     if( !obj.seq && Gibber.Audio ) {
       obj.seq = Gibber.Audio.Seqs.Seq({ doNotStart:true, scale:obj.scale, priority:priority, target:obj })
     }
     
-    fnc.seq = function( _v,_d ) {  
-      var v = $.isArray(_v) ? _v : [_v]
-      var d = $.isArray(_d) ? _d : typeof _d !== 'undefined' ? [_d] : null
-      var args = {
+    fnc.seq = function( _v,_d, num ) {
+      var seq
+      if( typeof _v === 'string' && ( obj.name === 'Drums' || obj.name === 'XOX' || obj.name === 'Ensemble' )) {
+        _v = _v.split('')
+        if( typeof _d === 'undefined' ) _d = 1 / _v.length
+      }
+      
+      if( typeof obj.seq === 'function' ) {
+        obj.seq = obj.object.seq // cube.position etc. TODO: Fix this hack!
+      }
+      
+      var v = $.isArray(_v) ? _v : [_v],
+          d = $.isArray(_d) ? _d : typeof _d !== 'undefined' ? [_d] : null,
+          args = {
             'key': key,
-            values: [ Gibber.construct( Gibber.Pattern, v ) ],//$.isArray(v) || v !== null && typeof v !== 'function' && typeof v.length === 'number' ? v : [v],
+            values: [ Gibber.construct( Gibber.Pattern, v ) ],
             durations: d !== null ? [ Gibber.construct( Gibber.Pattern, d ) ] : null,
             target: obj,
             'priority': priority
           }
-            
-      if( typeof seq !== 'undefined' ) {
-        seq.shouldStop = true
-        obj.seq.seqs.splice( seqNumber, 1 )
-      }
+
       
+      if( typeof num === 'undefined' ) num = 0 // _num++
+       
+      if( typeof seqs[ num ] !== 'undefined' ) {
+        seqs[ num ].shouldStop = true
+        delete seqs[ num ]
+        //obj.seq.seqs.splice( seqNumHash[ num ], 1 )
+      }
+            
       var valuesPattern = args.values[0]
       if( v.randomFlag ) {
         valuesPattern.filters.push( function() {
@@ -12977,7 +15098,7 @@ var Gibber = {
           valuesPattern.repeat( v.randomArgs[ i ], v.randomArgs[ i + 1 ] )
         }
       }
-      
+
       if( d !== null ) {
         var durationsPattern = args.durations[0]
         if( d.randomFlag ) {
@@ -12989,21 +15110,33 @@ var Gibber = {
             durationsPattern.repeat( d.randomArgs[ i ], d.randomArgs[ i + 1 ] )
           }
         }
+        
+        durationsPattern.seq = obj.seq
       }
-      obj.seq.add( args )
-            
-      seqNumber = d !== null ? obj.seq.seqs.length - 1 : obj.seq.autofire.length - 1
-      seq = d !== null ? obj.seq.seqs[ seqNumber ] : obj.seq.autofire[ seqNumber ]
       
-      Object.defineProperties( fnc, {
+      valuesPattern.seq = obj.seq
+      
+      obj.seq.add( args )
+      
+      seqNumber = obj.seq.seqs.length - 1
+      seqs[ num ] = seq = obj.seq.seqs[ seqNumber ]
+      seqNumHash[ num ] = seqNumber   
+      //seqNumber = d !== null ? obj.seq.seqs.length - 1 : obj.seq.autofire.length - 1
+      //seqs[ seqNumber ] = d !== null ? obj.seq.seqs[ num ] : obj.seq.autofire[ num ]
+      
+      fnc[ num ] = {}
+      
+      Object.defineProperties( fnc[ num ], {
         values: {
           configurable:true,
           get: function() { 
+            return valuesPattern
+            /*
             if( d !== null ) { // then use autofire array
               return obj.seq.seqs[ seqNumber ].values[0]
             }else{
               return obj.seq.autofire[ seqNumber ].values[0]
-            }
+            }*/
           },
           set: function( val ) {
             var pattern = Gibber.construct( Gibber.Pattern, val )
@@ -13022,59 +15155,86 @@ var Gibber = {
         durations: {
           configurable:true,
           get: function() { 
-            if( d !== null ) { // then it's not an autofire seq
+            /*if( d !== null ) { // then it's not an autofire seq
               return obj.seq.seqs[ seqNumber ].durations[ 0 ] 
             }else{
               return null
-            }
+            }*/
+            return durationsPattern
           },
           set: function( val ) {
             if( !Array.isArray( val ) ) {
               val = [ val ]
             }
-            obj.seq.seqs[ seqNumber ].durations = val   //.splice( 0, 10000, v )
-          }
+            //obj.seq.seqs[ seqNumber ].durations = val   //.splice( 0, 10000, v )
+            var pattern = Gibber.construct( Gibber.Pattern, val )
+            
+            if( !Array.isArray( pattern ) ) {
+              pattern = [ pattern ]
+            }
+            
+            obj.seq.seqs[ seqNumber ].durations = pattern   //.splice( 0, 10000, v )
+          },
         },
       })
       
-      // console.log( "D", d )
-      // console.log( "DURATIONS", obj.seq.seqs[seqNumber].durations[0] )
-      // if( d !== null ) {
-      //   console.log( "DEFINING DURATIONS", fnc )
-      //   fnc.durations.seq = function( _v, _d ) {
-      //     console.log("SEQUENCING DURATIONS")
-      //     var args = {
-      //       'key': 'durations',
-      //       values: [ Gibber.construct( Gibber.Pattern, _v ) ],//$.isArray(v) || v !== null && typeof v !== 'function' && typeof v.length === 'number' ? v : [v],
-      //       durations: d !== null ? [ Gibber.construct( Gibber.Pattern, _d ) ] : null,
-      //       target: fnc.durations,
-      //       'priority': 0
-      //     }
-      //   } 
-      //   obj.seq.add( args )
-      //   //Gibber.defineSequencedProperty( fnc, 'durations', false )
-      // }
+      fnc[ num ].seq = function( v, d ) {
+        fnc.seq( v,d, num ) 
+      }
       
       if( !obj.seq.isRunning ) {
         obj.seq.offset = Gibber.Clock.time( obj.offset )
         obj.seq.start( true, priority )
       }
+            
+      fnc.seq.stop = function() { seqs[ seqNumber ].shouldStop = true } 
+    
+      // TODO: property specific stop/start/shuffle etc. for polyseq
+      fnc.seq.start = function() {
+        seqs[ seqNumber ].shouldStop = false
+        obj.seq.timeline[0] = [ seq ]                
+        obj.seq.nextTime = 0
+      
+        if( !obj.seq.isRunning ) { 
+          obj.seq.start( false, priority )
+        }
+      }
+    
+      fnc.seq.repeat = function( numberOfTimes ) {
+        var repeatCount = 0
+      
+        var filter = function( args, ptrn ) {
+          if( args[2] % (ptrn.getLength() - 1) === 0 && args[2] !== 0) {
+            repeatCount++
+            if( repeatCount === numberOfTimes ) {
+              ptrn.seq.stop()
+            }
+          }
+          return args
+        }
+      
+        fnc.values.filters.push( filter )
+      }
+    
+      fnc.score = function( __v__, __d__ ) {
+        return fnc.seq.bind( obj, __v__, __d__ )
+      }
+    
+      Object.defineProperties( fnc, {
+        values: { 
+          configurable: true,
+          get: function() { return fnc[ num ].values },
+          set: function( val ) { return fnc[ num ].values = val },
+        },
+        durations: { 
+          configurable: true,
+          get: function() { return fnc[ num ].durations },
+          set: function( val ) { return fnc[ num ].durations = val },
+        }
+      })
       
       // console.log( key, fnc.values, fnc.durations )
       return obj
-    }
-    
-    fnc.seq.stop = function() { seq.shouldStop = true } 
-    
-    // TODO: property specific stop/start/shuffle etc. for polyseq
-    fnc.seq.start = function() {
-      seq.shouldStop = false
-      obj.seq.timeline[0] = [ seq ]                
-      obj.seq.nextTime = 0
-      
-      if( !obj.seq.isRunning ) { 
-        obj.seq.start( false, priority )
-      }
     }
   },
   
@@ -13218,7 +15378,7 @@ var Gibber = {
       })
     }
   },
-  
+                                 //obj, propertyName, shouldSeq, shouldRamp, mappingsDictionary, shouldUseMappings, priority, useOldGetter
   createProxyProperty: function( obj, _key, shouldSeq, shouldRamp, dict, _useMappings, priority ) {
     _useMappings = _useMappings === false ? false : true
     
@@ -13248,11 +15408,14 @@ Gibber.Utilities = _dereq_( './utilities' )( Gibber )
 // Gibber.Graphics  = require( 'gibber.graphics.lib/scripts/gibber/graphics/graphics' )( Gibber )
 // Gibber.Interface = require( 'gibber.interface.lib/scripts/gibber/interface/interface' )( Gibber )
 Gibber.mappings  = _dereq_( './mappings' )( Gibber )
+Gibber.Euclid = _dereq_( './euclidean' )( Gibber )
+// TODO: Make Score work without requiring audio
+// Gibber.Score     = require( './score' )//( Gibber ) // only initialize once Gibber.Audio.Core is loaded, otherwise problems
 
 module.exports = Gibber
 
 })()
-},{"./dollar":24,"./mappings":26,"./pattern":27,"./utilities":28}],26:[function(_dereq_,module,exports){
+},{"./dollar":31,"./euclidean":32,"./mappings":34,"./pattern":35,"./utilities":36}],34:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {  
   var mappings = {
     audio : {
@@ -13897,13 +16060,15 @@ module.exports.outputCurves= {
   LINEAR:0,
   LOGARITHMIC:1
 }
-},{}],27:[function(_dereq_,module,exports){
-!function() {
+},{}],35:[function(_dereq_,module,exports){
+module.exports = function( Gibber ) {
 
 "use strict"
 
+var $ = _dereq_( './dollar' )
+
 var PatternProto = {
-  concat : function( _pattern ) { this.values = this.values.concat( _pattern.values ) },    
+  concat : function( _pattern ) { this.values = this.values.concat( _pattern.values ) },  
   toString: function() { return this.values.toString() },
   valueOf: function() { return this.values },
   getLength: function() {
@@ -13919,9 +16084,9 @@ var PatternProto = {
     var args = [ val, 1, idx ] // 1 is phaseModifier
 
     for( var i = 0; i < this.filters.length; i++ ) {
-      args = this.filters[ i ]( args )
+      args = this.filters[ i ]( args, this )
     }
-
+    
     return args
   },
   _onchange : function() {},
@@ -13945,7 +16110,7 @@ var Pattern = function() {
     
     val = fnc.values[ Math.floor( idx % fnc.values.length ) ]
     args = fnc.runFilters( val, idx )
-        
+    
     fnc.phase += fnc.stepSize * args[ 1 ]
     val = args[ 0 ]
     
@@ -13967,8 +16132,10 @@ var Pattern = function() {
     storage : [],
     stepSize : 1,
     integersOnly : false,
-    repeats : [],
     filters : [],
+    /*humanize: function() {
+      
+    },*/
     onchange : null,
 
     range : function() {
@@ -13982,6 +16149,16 @@ var Pattern = function() {
       
       return fnc;
     },
+    
+    set: function() {
+      fnc.values.length = 0
+      
+      for( var i = 0; i < arguments[0].length; i++ ) {
+        fnc.values.push( arguments[0][i] )
+      }
+      
+      if( fnc.end > fnc.values.length - 1 ) { fnc.end = fnc.values.length - 1 }
+    },
      
     reverse : function() { 
       //fnc.values.reverse(); 
@@ -13992,9 +16169,9 @@ var Pattern = function() {
           temporary;
           
       for (left = 0, right = length - 1; left < right; left += 1, right -= 1) {
-          temporary = array[left];
-          array[left] = array[right];
-          array[right] = temporary;
+        temporary = array[left];
+        array[left] = array[right];
+        array[right] = temporary;
       }
       
       fnc._onchange() 
@@ -14012,20 +16189,23 @@ var Pattern = function() {
         }
       }
       
-      var repeating = false, repeatValue = null
+      var repeating = false, repeatValue = null, repeatIndex = null
       var filter = function( args ) {
-        var value = args[ 0 ], phaseModifier = args[ 1 ], output = args//output = [ value, phaseModifier ]
+        var value = args[ 0 ], phaseModifier = args[ 1 ], output = args
         
         //console.log( args, counts )
         if( repeating === false && counts[ value ] ) {
           repeating = true
           repeatValue = value
+          repeatIndex = args[2]
         }
         
         if( repeating === true ) {
           if( counts[ repeatValue ].phase !== counts[ repeatValue ].target ) {
             output[ 0 ] = repeatValue            
             output[ 1 ] = 0
+            output[ 2 ] = repeatIndex
+            //[ val, 1, idx ]
             counts[ repeatValue ].phase++
           }else{
             counts[ repeatValue ].phase = 0
@@ -14049,7 +16229,18 @@ var Pattern = function() {
     reset : function() { fnc.values = fnc.original.slice( 0 ); fnc._onchange(); return fnc; },
     store : function() { fnc.storage[ fnc.storage.length ] = fnc.values.slice( 0 ); return fnc; },
     transpose : function( amt ) { 
-      for( var i = 0; i < fnc.values.length; i++ ) fnc.values[ i ] += amt; 
+      for( var i = 0; i < fnc.values.length; i++ ) { 
+        var val = fnc.values[ i ]
+        
+        if( $.isArray( val ) ) {
+          for( var j = 0; j < val.length; j++ ) {
+            val[ j ] = fnc.integersOnly ? Math.round( val[ j ] + amt ) : val[ j ] + amt
+          }
+        }else{
+          fnc.values[ i ] = fnc.integersOnly ? Math.round( fnc.values[ i ] + amt ) : fnc.values[ i ] + amt
+        }
+      }
+      
       fnc._onchange()
       
       return fnc
@@ -14062,7 +16253,14 @@ var Pattern = function() {
     },
     scale : function( amt ) { 
       for( var i = 0; i < fnc.values.length; i++ ) {
-        fnc.values[ i ] = fnc.integersOnly ? Math.round( fnc.values[ i ] * amt ) : fnc.values[ i ] * amt
+        var val = fnc.values[ i ]
+        if( $.isArray( val ) ) {
+          for( var j = 0; j < val.length; j++ ) {
+            val[ j ] = fnc.integersOnly ? Math.round( val[ j ] * amt ) : val[ j ] * amt
+          }
+        }else{
+          fnc.values[ i ] = fnc.integersOnly ? Math.round( fnc.values[ i ] * amt ) : fnc.values[ i ] * amt
+        }
       }
       fnc._onchange()
       
@@ -14147,12 +16345,10 @@ var Pattern = function() {
   Gibber.createProxyMethods( fnc, [
     'rotate','switch','invert','reset', 'flip',
     'transpose','reverse','shuffle','scale',
-    'store', 'range'
+    'store', 'range', 'set'
   ], true )
   
   Gibber.createProxyProperties( fnc, { 'stepSize':0, 'start':0, 'end':0 })
-  // Gibber.defineSequencedProperty( fnc, 'end' )  
-  // Gibber.defineSequencedProperty( fnc, 'start' )  
   
   fnc.__proto__ = this.__proto__ 
   
@@ -14161,10 +16357,10 @@ var Pattern = function() {
 
 Pattern.prototype = PatternProto
 
-module.exports = Pattern
+return Pattern
 
-}()
-},{}],28:[function(_dereq_,module,exports){
+}
+},{"./dollar":31}],36:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
 
 "use strict"
@@ -14569,13 +16765,13 @@ var soloGroup = [],
         // Array.prototype.choose = Utilities.choose
         // // Array.prototype.Rnd = Utilities.random2
         // Array.prototype.merge = Utilities.merge
-      }  
+      }
     }
   
   return Utilities
 }
 
-},{}],29:[function(_dereq_,module,exports){
+},{}],37:[function(_dereq_,module,exports){
 /* MIT license */
 var convert = _dereq_("color-convert"),
     string = _dereq_("color-string");
@@ -15005,7 +17201,7 @@ Color.prototype.setChannel = function(space, index, val) {
    return this;
 }
 
-},{"color-convert":31,"color-string":32}],30:[function(_dereq_,module,exports){
+},{"color-convert":39,"color-string":40}],38:[function(_dereq_,module,exports){
 /* MIT license */
 
 module.exports = {
@@ -15697,7 +17893,7 @@ for (var key in cssKeywords) {
   reverseKeywords[JSON.stringify(cssKeywords[key])] = key;
 }
 
-},{}],31:[function(_dereq_,module,exports){
+},{}],39:[function(_dereq_,module,exports){
 var conversions = _dereq_("./conversions");
 
 var convert = function() {
@@ -15790,7 +17986,7 @@ Converter.prototype.getValues = function(space) {
 });
 
 module.exports = convert;
-},{"./conversions":30}],32:[function(_dereq_,module,exports){
+},{"./conversions":38}],40:[function(_dereq_,module,exports){
 /* MIT license */
 var convert = _dereq_("color-convert");
 
@@ -16004,7 +18200,7 @@ function hexDouble(num) {
   return (str.length < 2) ? "0" + str : str;
 }
 
-},{"color-convert":31}],33:[function(_dereq_,module,exports){
+},{"color-convert":39}],41:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  *
@@ -16052,7 +18248,7 @@ THREE.CopyShader = {
 
 };
 
-},{}],34:[function(_dereq_,module,exports){
+},{}],42:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  */
@@ -16108,7 +18304,7 @@ THREE.DotScreenPass.prototype = {
 
 };
 
-},{}],35:[function(_dereq_,module,exports){
+},{}],43:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  */
@@ -16254,7 +18450,7 @@ THREE.EffectComposer.quad = new THREE.Mesh( new THREE.PlaneGeometry( 2, 2 ), nul
 THREE.EffectComposer.scene = new THREE.Scene();
 THREE.EffectComposer.scene.add( THREE.EffectComposer.quad );
 
-},{}],36:[function(_dereq_,module,exports){
+},{}],44:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  */
@@ -16310,7 +18506,7 @@ THREE.FilmPass.prototype = {
 
 };
 
-},{}],37:[function(_dereq_,module,exports){
+},{}],45:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  */
@@ -16398,7 +18594,7 @@ THREE.ClearMaskPass.prototype = {
 
 };
 
-},{}],38:[function(_dereq_,module,exports){
+},{}],46:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  */
@@ -16451,7 +18647,7 @@ THREE.RenderPass.prototype = {
 
 };
 
-},{}],39:[function(_dereq_,module,exports){
+},{}],47:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  */
@@ -16504,7 +18700,7 @@ THREE.ShaderPass.prototype = {
 
 };
 
-},{}],40:[function(_dereq_,module,exports){
+},{}],48:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  *
@@ -16570,7 +18766,7 @@ THREE.BleachBypassShader = {
 
 };
 
-},{}],41:[function(_dereq_,module,exports){
+},{}],49:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  *
@@ -16621,7 +18817,7 @@ THREE.ColorifyShader = {
 
 };
 
-},{}],42:[function(_dereq_,module,exports){
+},{}],50:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  *
@@ -16691,7 +18887,7 @@ THREE.DotScreenShader = {
 
 };
 
-},{}],43:[function(_dereq_,module,exports){
+},{}],51:[function(_dereq_,module,exports){
 /**
  * @author zz85 / https://github.com/zz85 | https://www.lab4games.net/zz85/blog
  *
@@ -16786,7 +18982,7 @@ THREE.EdgeShader = {
 	].join("\n")
 };
 
-},{}],44:[function(_dereq_,module,exports){
+},{}],52:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  *
@@ -16892,7 +19088,7 @@ THREE.FilmShader = {
 
 };
 
-},{}],45:[function(_dereq_,module,exports){
+},{}],53:[function(_dereq_,module,exports){
 /**
  * @author alteredq / http://alteredqualia.com/
  *
@@ -16985,7 +19181,7 @@ THREE.FocusShader = {
 	].join("\n")
 };
 
-},{}],46:[function(_dereq_,module,exports){
+},{}],54:[function(_dereq_,module,exports){
 /**
  * @author felixturner / http://airtight.cc/
  *
@@ -17047,7 +19243,7 @@ THREE.KaleidoShader = {
 
 };
 
-},{}],47:[function(_dereq_,module,exports){
+},{}],55:[function(_dereq_,module,exports){
 /**
  * @author huwb / http://huwbowles.com/
  *
@@ -17357,7 +19553,7 @@ THREE.ShaderGodRays = {
 
 };
 
-},{}],48:[function(_dereq_,module,exports){
+},{}],56:[function(_dereq_,module,exports){
 // three.js - http://github.com/mrdoob/three.js
 
 !function(){
@@ -18073,7 +20269,7 @@ fragmentShader:"uniform vec3 color;\nuniform sampler2D map;\nuniform float opaci
 
 module.exports = THREE
 }()
-},{}],49:[function(_dereq_,module,exports){
+},{}],57:[function(_dereq_,module,exports){
 module.exports = function( Gibber, Graphics ) {
   "use strict"
   var $ = Gibber.dollar
@@ -18156,7 +20352,7 @@ module.exports = function( Gibber, Graphics ) {
         Graphics.modes['3d'].obj.remove()
       }
       
-      if( !_that.intialized ) Graphics.init( '2d', container )
+      if( !_that.initialized ) Graphics.init( '2d', container )
       
       _that.canvasObject.show()
       
@@ -18167,6 +20363,13 @@ module.exports = function( Gibber, Graphics ) {
          ctx = canvas.getContext( '2d' ),
          that = ctx,
          three = null;
+      //ctx.canvas = canvas
+      var __canvas = canvas
+      Object.defineProperty( ctx, 'canvas', {
+        get: function() { return __canvas },
+        set: function(v) { __canvas = v }
+      })
+      that.canvas = canvas
       
       $.extend( that, {
         top: 0,
@@ -18199,7 +20402,7 @@ module.exports = function( Gibber, Graphics ) {
           
         },
 
-        canvas: canvas,
+        //canvas: canvas,
         is3D: Graphics.mode === '3d',
         texture:  { needsUpdate: function() {} },//tex || { needsUpdate: function() {} }, 
         remove : function() {
@@ -18556,7 +20759,8 @@ module.exports = function( Gibber, Graphics ) {
         //   Graphics.graph.push( that )
         // }
       })
-
+       
+      //that.canvas = canvas
       cnvs = that
 
       Object.defineProperties( that, {
@@ -18593,7 +20797,7 @@ module.exports = function( Gibber, Graphics ) {
   
   return TwoD
 }
-},{}],50:[function(_dereq_,module,exports){
+},{}],58:[function(_dereq_,module,exports){
 module.exports = function( Gibber, Graphics ) {
   "use strict"
   
@@ -18741,7 +20945,7 @@ module.exports = function( Gibber, Graphics ) {
   
   return ThreeD
 }
-},{}],51:[function(_dereq_,module,exports){
+},{}],59:[function(_dereq_,module,exports){
 module.exports = function( Gibber, Graphics, THREE ){ 
 
 "use strict"
@@ -18785,6 +20989,31 @@ var types = [
     return obj
   }
 })
+
+Vec2.random = function( min, max ) {
+	if( typeof min === 'undefined' ) min = 0
+	if( typeof max === 'undefined' ) max = min + 1
+  return Vec2( rndf(min,max), rndf(min,max) )
+}
+
+Vec2.div = function( _vec, scalar ) {
+  var vec = _vec.clone()
+  vec.divideScalar( scalar )
+  return vec
+}
+
+Vec2.sub = function( a, b ) {
+  var vec = a.clone()
+  vec.sub( b )
+  return vec
+}
+
+THREE.Vector2.prototype.limit = function( limit ) {
+	if( this.length() > limit ) {
+    this.normalize()
+    this.multiplyScalar( limit )
+  }
+}
 
 var types = {
       Cube:  { width:50, height:50, depth:50 },
@@ -19180,7 +21409,7 @@ return Geometry;
 
 }
 
-},{}],52:[function(_dereq_,module,exports){
+},{}],60:[function(_dereq_,module,exports){
 module.exports = function( Gibber, Graphics ) {
 
 "use strict"
@@ -19403,7 +21632,7 @@ return Shaders
 //$.extend( window, Gibber.Graphics.Geometry )
 
 }
-},{}],53:[function(_dereq_,module,exports){
+},{}],61:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
 
 "use strict"
@@ -19467,7 +21696,7 @@ Graphics = {
       // }
     }
     
-    console.log( "_MODE", _mode )
+    console.log( "_MODE", _mode, this.mode )
     if( _mode !== null && typeof _mode !== 'undefined' && _mode !== this.mode ) {
       this.modes[ _mode ].obj.hide()
     } 
@@ -19716,7 +21945,7 @@ Graphics.Video = _dereq_( './video' )( Gibber, Graphics )
 return Graphics; 
 
 }
-},{"../external/three/postprocessing/CopyShader":33,"../external/three/postprocessing/DotScreenPass":34,"../external/three/postprocessing/EffectComposer":35,"../external/three/postprocessing/FilmPass":36,"../external/three/postprocessing/MaskPass":37,"../external/three/postprocessing/RenderPass":38,"../external/three/postprocessing/ShaderPass":39,"../external/three/postprocessing/shaders/BleachBypassShader":40,"../external/three/postprocessing/shaders/ColorifyShader":41,"../external/three/postprocessing/shaders/DotScreenShader":42,"../external/three/postprocessing/shaders/EdgeShader":43,"../external/three/postprocessing/shaders/FilmShader":44,"../external/three/postprocessing/shaders/FocusShader":45,"../external/three/postprocessing/shaders/KaleidoShader":46,"../external/three/postprocessing/shaders/ShaderGodRays":47,"../external/three/three.min":48,"./2d":49,"./3d":50,"./geometry":51,"./gibber_shaders":52,"./postprocessing":54,"./shader":55,"./video":56,"color":29}],54:[function(_dereq_,module,exports){
+},{"../external/three/postprocessing/CopyShader":41,"../external/three/postprocessing/DotScreenPass":42,"../external/three/postprocessing/EffectComposer":43,"../external/three/postprocessing/FilmPass":44,"../external/three/postprocessing/MaskPass":45,"../external/three/postprocessing/RenderPass":46,"../external/three/postprocessing/ShaderPass":47,"../external/three/postprocessing/shaders/BleachBypassShader":48,"../external/three/postprocessing/shaders/ColorifyShader":49,"../external/three/postprocessing/shaders/DotScreenShader":50,"../external/three/postprocessing/shaders/EdgeShader":51,"../external/three/postprocessing/shaders/FilmShader":52,"../external/three/postprocessing/shaders/FocusShader":53,"../external/three/postprocessing/shaders/KaleidoShader":54,"../external/three/postprocessing/shaders/ShaderGodRays":55,"../external/three/three.min":56,"./2d":57,"./3d":58,"./geometry":59,"./gibber_shaders":60,"./postprocessing":62,"./shader":63,"./video":64,"color":37}],62:[function(_dereq_,module,exports){
 module.exports = function( Gibber, Graphics ) {
 
 "use strict"
@@ -20247,36 +22476,36 @@ var PP = {
   },
 }
 
-var types = [
-  [ 'Vec2', 'Vector2', 'vec2' ],
-  [ 'Vec3', 'Vector3', 'vec3' ],
-  [ 'Vec4', 'Vector4', 'vec4' ],    
-]
-.forEach( function( element, index, array ) {
-  var type = element[ 0 ],
-    threeType = element[ 1 ] || element[ 0 ],
-    shaderType = element[ 2 ] || 'f'
-    
-  window[ type ] = function() {
-    var args = Array.prototype.slice.call( arguments, 0 ),
-        obj
-    
-    if( Array.isArray( args[0] ) ) {
-      var _args = []
-      for( var i = 0; i < args[0].length; i++ ) {
-        _args[ i ] = args[0][ i ]
-      }
-      args = _args
-    }    
-        
-    obj = Gibber.construct( THREE[ threeType ], args )
-    
-    obj.name = type
-    obj.shaderType = shaderType
-    
-    return obj
-  }
-})
+// var types = [
+//   [ 'Vec2', 'Vector2', 'vec2' ],
+//   [ 'Vec3', 'Vector3', 'vec3' ],
+//   [ 'Vec4', 'Vector4', 'vec4' ],    
+// ]
+// .forEach( function( element, index, array ) {
+//   var type = element[ 0 ],
+//     threeType = element[ 1 ] || element[ 0 ],
+//     shaderType = element[ 2 ] || 'f'
+//     
+//   window[ type ] = function() {
+//     var args = Array.prototype.slice.call( arguments, 0 ),
+//         obj
+//     
+//     if( Array.isArray( args[0] ) ) {
+//       var _args = []
+//       for( var i = 0; i < args[0].length; i++ ) {
+//         _args[ i ] = args[0][ i ]
+//       }
+//       args = _args
+//     }    
+//         
+//     obj = Gibber.construct( THREE[ threeType ], args )
+//     
+//     obj.name = type
+//     obj.shaderType = shaderType
+//     
+//     return obj
+//   }
+// })
 
 var threeTypes = {
   'vec2' : 'v2',
@@ -20343,7 +22572,7 @@ return PP
 
 }
 
-},{}],55:[function(_dereq_,module,exports){
+},{}],63:[function(_dereq_,module,exports){
 module.exports = function( Gibber, Graphics ) {
   var GG = Gibber.Graphics
 	
@@ -20568,7 +22797,7 @@ module.exports = function( Gibber, Graphics ) {
     //   return null
     // } 
 }
-},{}],56:[function(_dereq_,module,exports){
+},{}],64:[function(_dereq_,module,exports){
 /*
 a = Video()
 
@@ -20654,7 +22883,7 @@ module.exports = function( Gibber, Graphics ) {
   
   return Video 
 }
-},{}],57:[function(_dereq_,module,exports){
+},{}],65:[function(_dereq_,module,exports){
 /**#Interface
 A singleton object holding all widget constructors and a couple of other methods / properties. It is automatically created as soon as interface.js is loaded.
 **/
@@ -24348,7 +26577,7 @@ Interface.defineChildProperties = function(widget, properties) {
 module.exports = Interface
 
 }()
-},{"jquery":58}],58:[function(_dereq_,module,exports){
+},{"jquery":66}],66:[function(_dereq_,module,exports){
 /*!
  * jQuery JavaScript Library v2.1.1
  * http://jquery.com/
@@ -33540,7 +35769,7 @@ return jQuery;
 
 }));
 
-},{}],59:[function(_dereq_,module,exports){
+},{}],67:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
 
 var Interface = Gibber.Interface
@@ -33692,7 +35921,7 @@ var Autogui = {
 return Autogui
 
 }
-},{}],60:[function(_dereq_,module,exports){
+},{}],68:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   var $ = Gibber.dollar,
       mouse = _dereq_( './mouse.js' ) // delay initialization until export
@@ -34440,7 +36669,7 @@ module.exports = function( Gibber ) {
   return I
 }
 
-},{"./autogui":59,"./mouse.js":61,"interface.js":57}],61:[function(_dereq_,module,exports){
+},{"./autogui":67,"./mouse.js":69,"interface.js":65}],69:[function(_dereq_,module,exports){
 module.exports = function( Gibber ) {
   "use strict"
   
@@ -34623,7 +36852,6254 @@ module.exports = function( Gibber ) {
     
     return _m
 }
-},{}],62:[function(_dereq_,module,exports){
+},{}],70:[function(_dereq_,module,exports){
+/*!
+ * The buffer module from node.js, for the browser.
+ *
+ * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
+ * @license  MIT
+ */
+
+var base64 = _dereq_('base64-js')
+var ieee754 = _dereq_('ieee754')
+
+exports.Buffer = Buffer
+exports.SlowBuffer = Buffer
+exports.INSPECT_MAX_BYTES = 50
+Buffer.poolSize = 8192
+
+/**
+ * If `Buffer._useTypedArrays`:
+ *   === true    Use Uint8Array implementation (fastest)
+ *   === false   Use Object implementation (compatible down to IE6)
+ */
+Buffer._useTypedArrays = (function () {
+  // Detect if browser supports Typed Arrays. Supported browsers are IE 10+, Firefox 4+,
+  // Chrome 7+, Safari 5.1+, Opera 11.6+, iOS 4.2+. If the browser does not support adding
+  // properties to `Uint8Array` instances, then that's the same as no `Uint8Array` support
+  // because we need to be able to add all the node Buffer API methods. This is an issue
+  // in Firefox 4-29. Now fixed: https://bugzilla.mozilla.org/show_bug.cgi?id=695438
+  try {
+    var buf = new ArrayBuffer(0)
+    var arr = new Uint8Array(buf)
+    arr.foo = function () { return 42 }
+    return 42 === arr.foo() &&
+        typeof arr.subarray === 'function' // Chrome 9-10 lack `subarray`
+  } catch (e) {
+    return false
+  }
+})()
+
+/**
+ * Class: Buffer
+ * =============
+ *
+ * The Buffer constructor returns instances of `Uint8Array` that are augmented
+ * with function properties for all the node `Buffer` API functions. We use
+ * `Uint8Array` so that square bracket notation works as expected -- it returns
+ * a single octet.
+ *
+ * By augmenting the instances, we can avoid modifying the `Uint8Array`
+ * prototype.
+ */
+function Buffer (subject, encoding, noZero) {
+  if (!(this instanceof Buffer))
+    return new Buffer(subject, encoding, noZero)
+
+  var type = typeof subject
+
+  // Workaround: node's base64 implementation allows for non-padded strings
+  // while base64-js does not.
+  if (encoding === 'base64' && type === 'string') {
+    subject = stringtrim(subject)
+    while (subject.length % 4 !== 0) {
+      subject = subject + '='
+    }
+  }
+
+  // Find the length
+  var length
+  if (type === 'number')
+    length = coerce(subject)
+  else if (type === 'string')
+    length = Buffer.byteLength(subject, encoding)
+  else if (type === 'object')
+    length = coerce(subject.length) // assume that object is array-like
+  else
+    throw new Error('First argument needs to be a number, array or string.')
+
+  var buf
+  if (Buffer._useTypedArrays) {
+    // Preferred: Return an augmented `Uint8Array` instance for best performance
+    buf = Buffer._augment(new Uint8Array(length))
+  } else {
+    // Fallback: Return THIS instance of Buffer (created by `new`)
+    buf = this
+    buf.length = length
+    buf._isBuffer = true
+  }
+
+  var i
+  if (Buffer._useTypedArrays && typeof subject.byteLength === 'number') {
+    // Speed optimization -- use set if we're copying from a typed array
+    buf._set(subject)
+  } else if (isArrayish(subject)) {
+    // Treat array-ish objects as a byte array
+    for (i = 0; i < length; i++) {
+      if (Buffer.isBuffer(subject))
+        buf[i] = subject.readUInt8(i)
+      else
+        buf[i] = subject[i]
+    }
+  } else if (type === 'string') {
+    buf.write(subject, 0, encoding)
+  } else if (type === 'number' && !Buffer._useTypedArrays && !noZero) {
+    for (i = 0; i < length; i++) {
+      buf[i] = 0
+    }
+  }
+
+  return buf
+}
+
+// STATIC METHODS
+// ==============
+
+Buffer.isEncoding = function (encoding) {
+  switch (String(encoding).toLowerCase()) {
+    case 'hex':
+    case 'utf8':
+    case 'utf-8':
+    case 'ascii':
+    case 'binary':
+    case 'base64':
+    case 'raw':
+    case 'ucs2':
+    case 'ucs-2':
+    case 'utf16le':
+    case 'utf-16le':
+      return true
+    default:
+      return false
+  }
+}
+
+Buffer.isBuffer = function (b) {
+  return !!(b !== null && b !== undefined && b._isBuffer)
+}
+
+Buffer.byteLength = function (str, encoding) {
+  var ret
+  str = str + ''
+  switch (encoding || 'utf8') {
+    case 'hex':
+      ret = str.length / 2
+      break
+    case 'utf8':
+    case 'utf-8':
+      ret = utf8ToBytes(str).length
+      break
+    case 'ascii':
+    case 'binary':
+    case 'raw':
+      ret = str.length
+      break
+    case 'base64':
+      ret = base64ToBytes(str).length
+      break
+    case 'ucs2':
+    case 'ucs-2':
+    case 'utf16le':
+    case 'utf-16le':
+      ret = str.length * 2
+      break
+    default:
+      throw new Error('Unknown encoding')
+  }
+  return ret
+}
+
+Buffer.concat = function (list, totalLength) {
+  assert(isArray(list), 'Usage: Buffer.concat(list, [totalLength])\n' +
+      'list should be an Array.')
+
+  if (list.length === 0) {
+    return new Buffer(0)
+  } else if (list.length === 1) {
+    return list[0]
+  }
+
+  var i
+  if (typeof totalLength !== 'number') {
+    totalLength = 0
+    for (i = 0; i < list.length; i++) {
+      totalLength += list[i].length
+    }
+  }
+
+  var buf = new Buffer(totalLength)
+  var pos = 0
+  for (i = 0; i < list.length; i++) {
+    var item = list[i]
+    item.copy(buf, pos)
+    pos += item.length
+  }
+  return buf
+}
+
+// BUFFER INSTANCE METHODS
+// =======================
+
+function _hexWrite (buf, string, offset, length) {
+  offset = Number(offset) || 0
+  var remaining = buf.length - offset
+  if (!length) {
+    length = remaining
+  } else {
+    length = Number(length)
+    if (length > remaining) {
+      length = remaining
+    }
+  }
+
+  // must be an even number of digits
+  var strLen = string.length
+  assert(strLen % 2 === 0, 'Invalid hex string')
+
+  if (length > strLen / 2) {
+    length = strLen / 2
+  }
+  for (var i = 0; i < length; i++) {
+    var byte = parseInt(string.substr(i * 2, 2), 16)
+    assert(!isNaN(byte), 'Invalid hex string')
+    buf[offset + i] = byte
+  }
+  Buffer._charsWritten = i * 2
+  return i
+}
+
+function _utf8Write (buf, string, offset, length) {
+  var charsWritten = Buffer._charsWritten =
+    blitBuffer(utf8ToBytes(string), buf, offset, length)
+  return charsWritten
+}
+
+function _asciiWrite (buf, string, offset, length) {
+  var charsWritten = Buffer._charsWritten =
+    blitBuffer(asciiToBytes(string), buf, offset, length)
+  return charsWritten
+}
+
+function _binaryWrite (buf, string, offset, length) {
+  return _asciiWrite(buf, string, offset, length)
+}
+
+function _base64Write (buf, string, offset, length) {
+  var charsWritten = Buffer._charsWritten =
+    blitBuffer(base64ToBytes(string), buf, offset, length)
+  return charsWritten
+}
+
+function _utf16leWrite (buf, string, offset, length) {
+  var charsWritten = Buffer._charsWritten =
+    blitBuffer(utf16leToBytes(string), buf, offset, length)
+  return charsWritten
+}
+
+Buffer.prototype.write = function (string, offset, length, encoding) {
+  // Support both (string, offset, length, encoding)
+  // and the legacy (string, encoding, offset, length)
+  if (isFinite(offset)) {
+    if (!isFinite(length)) {
+      encoding = length
+      length = undefined
+    }
+  } else {  // legacy
+    var swap = encoding
+    encoding = offset
+    offset = length
+    length = swap
+  }
+
+  offset = Number(offset) || 0
+  var remaining = this.length - offset
+  if (!length) {
+    length = remaining
+  } else {
+    length = Number(length)
+    if (length > remaining) {
+      length = remaining
+    }
+  }
+  encoding = String(encoding || 'utf8').toLowerCase()
+
+  var ret
+  switch (encoding) {
+    case 'hex':
+      ret = _hexWrite(this, string, offset, length)
+      break
+    case 'utf8':
+    case 'utf-8':
+      ret = _utf8Write(this, string, offset, length)
+      break
+    case 'ascii':
+      ret = _asciiWrite(this, string, offset, length)
+      break
+    case 'binary':
+      ret = _binaryWrite(this, string, offset, length)
+      break
+    case 'base64':
+      ret = _base64Write(this, string, offset, length)
+      break
+    case 'ucs2':
+    case 'ucs-2':
+    case 'utf16le':
+    case 'utf-16le':
+      ret = _utf16leWrite(this, string, offset, length)
+      break
+    default:
+      throw new Error('Unknown encoding')
+  }
+  return ret
+}
+
+Buffer.prototype.toString = function (encoding, start, end) {
+  var self = this
+
+  encoding = String(encoding || 'utf8').toLowerCase()
+  start = Number(start) || 0
+  end = (end !== undefined)
+    ? Number(end)
+    : end = self.length
+
+  // Fastpath empty strings
+  if (end === start)
+    return ''
+
+  var ret
+  switch (encoding) {
+    case 'hex':
+      ret = _hexSlice(self, start, end)
+      break
+    case 'utf8':
+    case 'utf-8':
+      ret = _utf8Slice(self, start, end)
+      break
+    case 'ascii':
+      ret = _asciiSlice(self, start, end)
+      break
+    case 'binary':
+      ret = _binarySlice(self, start, end)
+      break
+    case 'base64':
+      ret = _base64Slice(self, start, end)
+      break
+    case 'ucs2':
+    case 'ucs-2':
+    case 'utf16le':
+    case 'utf-16le':
+      ret = _utf16leSlice(self, start, end)
+      break
+    default:
+      throw new Error('Unknown encoding')
+  }
+  return ret
+}
+
+Buffer.prototype.toJSON = function () {
+  return {
+    type: 'Buffer',
+    data: Array.prototype.slice.call(this._arr || this, 0)
+  }
+}
+
+// copy(targetBuffer, targetStart=0, sourceStart=0, sourceEnd=buffer.length)
+Buffer.prototype.copy = function (target, target_start, start, end) {
+  var source = this
+
+  if (!start) start = 0
+  if (!end && end !== 0) end = this.length
+  if (!target_start) target_start = 0
+
+  // Copy 0 bytes; we're done
+  if (end === start) return
+  if (target.length === 0 || source.length === 0) return
+
+  // Fatal error conditions
+  assert(end >= start, 'sourceEnd < sourceStart')
+  assert(target_start >= 0 && target_start < target.length,
+      'targetStart out of bounds')
+  assert(start >= 0 && start < source.length, 'sourceStart out of bounds')
+  assert(end >= 0 && end <= source.length, 'sourceEnd out of bounds')
+
+  // Are we oob?
+  if (end > this.length)
+    end = this.length
+  if (target.length - target_start < end - start)
+    end = target.length - target_start + start
+
+  var len = end - start
+
+  if (len < 100 || !Buffer._useTypedArrays) {
+    for (var i = 0; i < len; i++)
+      target[i + target_start] = this[i + start]
+  } else {
+    target._set(this.subarray(start, start + len), target_start)
+  }
+}
+
+function _base64Slice (buf, start, end) {
+  if (start === 0 && end === buf.length) {
+    return base64.fromByteArray(buf)
+  } else {
+    return base64.fromByteArray(buf.slice(start, end))
+  }
+}
+
+function _utf8Slice (buf, start, end) {
+  var res = ''
+  var tmp = ''
+  end = Math.min(buf.length, end)
+
+  for (var i = start; i < end; i++) {
+    if (buf[i] <= 0x7F) {
+      res += decodeUtf8Char(tmp) + String.fromCharCode(buf[i])
+      tmp = ''
+    } else {
+      tmp += '%' + buf[i].toString(16)
+    }
+  }
+
+  return res + decodeUtf8Char(tmp)
+}
+
+function _asciiSlice (buf, start, end) {
+  var ret = ''
+  end = Math.min(buf.length, end)
+
+  for (var i = start; i < end; i++)
+    ret += String.fromCharCode(buf[i])
+  return ret
+}
+
+function _binarySlice (buf, start, end) {
+  return _asciiSlice(buf, start, end)
+}
+
+function _hexSlice (buf, start, end) {
+  var len = buf.length
+
+  if (!start || start < 0) start = 0
+  if (!end || end < 0 || end > len) end = len
+
+  var out = ''
+  for (var i = start; i < end; i++) {
+    out += toHex(buf[i])
+  }
+  return out
+}
+
+function _utf16leSlice (buf, start, end) {
+  var bytes = buf.slice(start, end)
+  var res = ''
+  for (var i = 0; i < bytes.length; i += 2) {
+    res += String.fromCharCode(bytes[i] + bytes[i+1] * 256)
+  }
+  return res
+}
+
+Buffer.prototype.slice = function (start, end) {
+  var len = this.length
+  start = clamp(start, len, 0)
+  end = clamp(end, len, len)
+
+  if (Buffer._useTypedArrays) {
+    return Buffer._augment(this.subarray(start, end))
+  } else {
+    var sliceLen = end - start
+    var newBuf = new Buffer(sliceLen, undefined, true)
+    for (var i = 0; i < sliceLen; i++) {
+      newBuf[i] = this[i + start]
+    }
+    return newBuf
+  }
+}
+
+// `get` will be removed in Node 0.13+
+Buffer.prototype.get = function (offset) {
+  console.log('.get() is deprecated. Access using array indexes instead.')
+  return this.readUInt8(offset)
+}
+
+// `set` will be removed in Node 0.13+
+Buffer.prototype.set = function (v, offset) {
+  console.log('.set() is deprecated. Access using array indexes instead.')
+  return this.writeUInt8(v, offset)
+}
+
+Buffer.prototype.readUInt8 = function (offset, noAssert) {
+  if (!noAssert) {
+    assert(offset !== undefined && offset !== null, 'missing offset')
+    assert(offset < this.length, 'Trying to read beyond buffer length')
+  }
+
+  if (offset >= this.length)
+    return
+
+  return this[offset]
+}
+
+function _readUInt16 (buf, offset, littleEndian, noAssert) {
+  if (!noAssert) {
+    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
+    assert(offset !== undefined && offset !== null, 'missing offset')
+    assert(offset + 1 < buf.length, 'Trying to read beyond buffer length')
+  }
+
+  var len = buf.length
+  if (offset >= len)
+    return
+
+  var val
+  if (littleEndian) {
+    val = buf[offset]
+    if (offset + 1 < len)
+      val |= buf[offset + 1] << 8
+  } else {
+    val = buf[offset] << 8
+    if (offset + 1 < len)
+      val |= buf[offset + 1]
+  }
+  return val
+}
+
+Buffer.prototype.readUInt16LE = function (offset, noAssert) {
+  return _readUInt16(this, offset, true, noAssert)
+}
+
+Buffer.prototype.readUInt16BE = function (offset, noAssert) {
+  return _readUInt16(this, offset, false, noAssert)
+}
+
+function _readUInt32 (buf, offset, littleEndian, noAssert) {
+  if (!noAssert) {
+    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
+    assert(offset !== undefined && offset !== null, 'missing offset')
+    assert(offset + 3 < buf.length, 'Trying to read beyond buffer length')
+  }
+
+  var len = buf.length
+  if (offset >= len)
+    return
+
+  var val
+  if (littleEndian) {
+    if (offset + 2 < len)
+      val = buf[offset + 2] << 16
+    if (offset + 1 < len)
+      val |= buf[offset + 1] << 8
+    val |= buf[offset]
+    if (offset + 3 < len)
+      val = val + (buf[offset + 3] << 24 >>> 0)
+  } else {
+    if (offset + 1 < len)
+      val = buf[offset + 1] << 16
+    if (offset + 2 < len)
+      val |= buf[offset + 2] << 8
+    if (offset + 3 < len)
+      val |= buf[offset + 3]
+    val = val + (buf[offset] << 24 >>> 0)
+  }
+  return val
+}
+
+Buffer.prototype.readUInt32LE = function (offset, noAssert) {
+  return _readUInt32(this, offset, true, noAssert)
+}
+
+Buffer.prototype.readUInt32BE = function (offset, noAssert) {
+  return _readUInt32(this, offset, false, noAssert)
+}
+
+Buffer.prototype.readInt8 = function (offset, noAssert) {
+  if (!noAssert) {
+    assert(offset !== undefined && offset !== null,
+        'missing offset')
+    assert(offset < this.length, 'Trying to read beyond buffer length')
+  }
+
+  if (offset >= this.length)
+    return
+
+  var neg = this[offset] & 0x80
+  if (neg)
+    return (0xff - this[offset] + 1) * -1
+  else
+    return this[offset]
+}
+
+function _readInt16 (buf, offset, littleEndian, noAssert) {
+  if (!noAssert) {
+    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
+    assert(offset !== undefined && offset !== null, 'missing offset')
+    assert(offset + 1 < buf.length, 'Trying to read beyond buffer length')
+  }
+
+  var len = buf.length
+  if (offset >= len)
+    return
+
+  var val = _readUInt16(buf, offset, littleEndian, true)
+  var neg = val & 0x8000
+  if (neg)
+    return (0xffff - val + 1) * -1
+  else
+    return val
+}
+
+Buffer.prototype.readInt16LE = function (offset, noAssert) {
+  return _readInt16(this, offset, true, noAssert)
+}
+
+Buffer.prototype.readInt16BE = function (offset, noAssert) {
+  return _readInt16(this, offset, false, noAssert)
+}
+
+function _readInt32 (buf, offset, littleEndian, noAssert) {
+  if (!noAssert) {
+    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
+    assert(offset !== undefined && offset !== null, 'missing offset')
+    assert(offset + 3 < buf.length, 'Trying to read beyond buffer length')
+  }
+
+  var len = buf.length
+  if (offset >= len)
+    return
+
+  var val = _readUInt32(buf, offset, littleEndian, true)
+  var neg = val & 0x80000000
+  if (neg)
+    return (0xffffffff - val + 1) * -1
+  else
+    return val
+}
+
+Buffer.prototype.readInt32LE = function (offset, noAssert) {
+  return _readInt32(this, offset, true, noAssert)
+}
+
+Buffer.prototype.readInt32BE = function (offset, noAssert) {
+  return _readInt32(this, offset, false, noAssert)
+}
+
+function _readFloat (buf, offset, littleEndian, noAssert) {
+  if (!noAssert) {
+    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
+    assert(offset + 3 < buf.length, 'Trying to read beyond buffer length')
+  }
+
+  return ieee754.read(buf, offset, littleEndian, 23, 4)
+}
+
+Buffer.prototype.readFloatLE = function (offset, noAssert) {
+  return _readFloat(this, offset, true, noAssert)
+}
+
+Buffer.prototype.readFloatBE = function (offset, noAssert) {
+  return _readFloat(this, offset, false, noAssert)
+}
+
+function _readDouble (buf, offset, littleEndian, noAssert) {
+  if (!noAssert) {
+    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
+    assert(offset + 7 < buf.length, 'Trying to read beyond buffer length')
+  }
+
+  return ieee754.read(buf, offset, littleEndian, 52, 8)
+}
+
+Buffer.prototype.readDoubleLE = function (offset, noAssert) {
+  return _readDouble(this, offset, true, noAssert)
+}
+
+Buffer.prototype.readDoubleBE = function (offset, noAssert) {
+  return _readDouble(this, offset, false, noAssert)
+}
+
+Buffer.prototype.writeUInt8 = function (value, offset, noAssert) {
+  if (!noAssert) {
+    assert(value !== undefined && value !== null, 'missing value')
+    assert(offset !== undefined && offset !== null, 'missing offset')
+    assert(offset < this.length, 'trying to write beyond buffer length')
+    verifuint(value, 0xff)
+  }
+
+  if (offset >= this.length) return
+
+  this[offset] = value
+}
+
+function _writeUInt16 (buf, value, offset, littleEndian, noAssert) {
+  if (!noAssert) {
+    assert(value !== undefined && value !== null, 'missing value')
+    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
+    assert(offset !== undefined && offset !== null, 'missing offset')
+    assert(offset + 1 < buf.length, 'trying to write beyond buffer length')
+    verifuint(value, 0xffff)
+  }
+
+  var len = buf.length
+  if (offset >= len)
+    return
+
+  for (var i = 0, j = Math.min(len - offset, 2); i < j; i++) {
+    buf[offset + i] =
+        (value & (0xff << (8 * (littleEndian ? i : 1 - i)))) >>>
+            (littleEndian ? i : 1 - i) * 8
+  }
+}
+
+Buffer.prototype.writeUInt16LE = function (value, offset, noAssert) {
+  _writeUInt16(this, value, offset, true, noAssert)
+}
+
+Buffer.prototype.writeUInt16BE = function (value, offset, noAssert) {
+  _writeUInt16(this, value, offset, false, noAssert)
+}
+
+function _writeUInt32 (buf, value, offset, littleEndian, noAssert) {
+  if (!noAssert) {
+    assert(value !== undefined && value !== null, 'missing value')
+    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
+    assert(offset !== undefined && offset !== null, 'missing offset')
+    assert(offset + 3 < buf.length, 'trying to write beyond buffer length')
+    verifuint(value, 0xffffffff)
+  }
+
+  var len = buf.length
+  if (offset >= len)
+    return
+
+  for (var i = 0, j = Math.min(len - offset, 4); i < j; i++) {
+    buf[offset + i] =
+        (value >>> (littleEndian ? i : 3 - i) * 8) & 0xff
+  }
+}
+
+Buffer.prototype.writeUInt32LE = function (value, offset, noAssert) {
+  _writeUInt32(this, value, offset, true, noAssert)
+}
+
+Buffer.prototype.writeUInt32BE = function (value, offset, noAssert) {
+  _writeUInt32(this, value, offset, false, noAssert)
+}
+
+Buffer.prototype.writeInt8 = function (value, offset, noAssert) {
+  if (!noAssert) {
+    assert(value !== undefined && value !== null, 'missing value')
+    assert(offset !== undefined && offset !== null, 'missing offset')
+    assert(offset < this.length, 'Trying to write beyond buffer length')
+    verifsint(value, 0x7f, -0x80)
+  }
+
+  if (offset >= this.length)
+    return
+
+  if (value >= 0)
+    this.writeUInt8(value, offset, noAssert)
+  else
+    this.writeUInt8(0xff + value + 1, offset, noAssert)
+}
+
+function _writeInt16 (buf, value, offset, littleEndian, noAssert) {
+  if (!noAssert) {
+    assert(value !== undefined && value !== null, 'missing value')
+    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
+    assert(offset !== undefined && offset !== null, 'missing offset')
+    assert(offset + 1 < buf.length, 'Trying to write beyond buffer length')
+    verifsint(value, 0x7fff, -0x8000)
+  }
+
+  var len = buf.length
+  if (offset >= len)
+    return
+
+  if (value >= 0)
+    _writeUInt16(buf, value, offset, littleEndian, noAssert)
+  else
+    _writeUInt16(buf, 0xffff + value + 1, offset, littleEndian, noAssert)
+}
+
+Buffer.prototype.writeInt16LE = function (value, offset, noAssert) {
+  _writeInt16(this, value, offset, true, noAssert)
+}
+
+Buffer.prototype.writeInt16BE = function (value, offset, noAssert) {
+  _writeInt16(this, value, offset, false, noAssert)
+}
+
+function _writeInt32 (buf, value, offset, littleEndian, noAssert) {
+  if (!noAssert) {
+    assert(value !== undefined && value !== null, 'missing value')
+    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
+    assert(offset !== undefined && offset !== null, 'missing offset')
+    assert(offset + 3 < buf.length, 'Trying to write beyond buffer length')
+    verifsint(value, 0x7fffffff, -0x80000000)
+  }
+
+  var len = buf.length
+  if (offset >= len)
+    return
+
+  if (value >= 0)
+    _writeUInt32(buf, value, offset, littleEndian, noAssert)
+  else
+    _writeUInt32(buf, 0xffffffff + value + 1, offset, littleEndian, noAssert)
+}
+
+Buffer.prototype.writeInt32LE = function (value, offset, noAssert) {
+  _writeInt32(this, value, offset, true, noAssert)
+}
+
+Buffer.prototype.writeInt32BE = function (value, offset, noAssert) {
+  _writeInt32(this, value, offset, false, noAssert)
+}
+
+function _writeFloat (buf, value, offset, littleEndian, noAssert) {
+  if (!noAssert) {
+    assert(value !== undefined && value !== null, 'missing value')
+    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
+    assert(offset !== undefined && offset !== null, 'missing offset')
+    assert(offset + 3 < buf.length, 'Trying to write beyond buffer length')
+    verifIEEE754(value, 3.4028234663852886e+38, -3.4028234663852886e+38)
+  }
+
+  var len = buf.length
+  if (offset >= len)
+    return
+
+  ieee754.write(buf, value, offset, littleEndian, 23, 4)
+}
+
+Buffer.prototype.writeFloatLE = function (value, offset, noAssert) {
+  _writeFloat(this, value, offset, true, noAssert)
+}
+
+Buffer.prototype.writeFloatBE = function (value, offset, noAssert) {
+  _writeFloat(this, value, offset, false, noAssert)
+}
+
+function _writeDouble (buf, value, offset, littleEndian, noAssert) {
+  if (!noAssert) {
+    assert(value !== undefined && value !== null, 'missing value')
+    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
+    assert(offset !== undefined && offset !== null, 'missing offset')
+    assert(offset + 7 < buf.length,
+        'Trying to write beyond buffer length')
+    verifIEEE754(value, 1.7976931348623157E+308, -1.7976931348623157E+308)
+  }
+
+  var len = buf.length
+  if (offset >= len)
+    return
+
+  ieee754.write(buf, value, offset, littleEndian, 52, 8)
+}
+
+Buffer.prototype.writeDoubleLE = function (value, offset, noAssert) {
+  _writeDouble(this, value, offset, true, noAssert)
+}
+
+Buffer.prototype.writeDoubleBE = function (value, offset, noAssert) {
+  _writeDouble(this, value, offset, false, noAssert)
+}
+
+// fill(value, start=0, end=buffer.length)
+Buffer.prototype.fill = function (value, start, end) {
+  if (!value) value = 0
+  if (!start) start = 0
+  if (!end) end = this.length
+
+  if (typeof value === 'string') {
+    value = value.charCodeAt(0)
+  }
+
+  assert(typeof value === 'number' && !isNaN(value), 'value is not a number')
+  assert(end >= start, 'end < start')
+
+  // Fill 0 bytes; we're done
+  if (end === start) return
+  if (this.length === 0) return
+
+  assert(start >= 0 && start < this.length, 'start out of bounds')
+  assert(end >= 0 && end <= this.length, 'end out of bounds')
+
+  for (var i = start; i < end; i++) {
+    this[i] = value
+  }
+}
+
+Buffer.prototype.inspect = function () {
+  var out = []
+  var len = this.length
+  for (var i = 0; i < len; i++) {
+    out[i] = toHex(this[i])
+    if (i === exports.INSPECT_MAX_BYTES) {
+      out[i + 1] = '...'
+      break
+    }
+  }
+  return '<Buffer ' + out.join(' ') + '>'
+}
+
+/**
+ * Creates a new `ArrayBuffer` with the *copied* memory of the buffer instance.
+ * Added in Node 0.12. Only available in browsers that support ArrayBuffer.
+ */
+Buffer.prototype.toArrayBuffer = function () {
+  if (typeof Uint8Array !== 'undefined') {
+    if (Buffer._useTypedArrays) {
+      return (new Buffer(this)).buffer
+    } else {
+      var buf = new Uint8Array(this.length)
+      for (var i = 0, len = buf.length; i < len; i += 1)
+        buf[i] = this[i]
+      return buf.buffer
+    }
+  } else {
+    throw new Error('Buffer.toArrayBuffer not supported in this browser')
+  }
+}
+
+// HELPER FUNCTIONS
+// ================
+
+function stringtrim (str) {
+  if (str.trim) return str.trim()
+  return str.replace(/^\s+|\s+$/g, '')
+}
+
+var BP = Buffer.prototype
+
+/**
+ * Augment a Uint8Array *instance* (not the Uint8Array class!) with Buffer methods
+ */
+Buffer._augment = function (arr) {
+  arr._isBuffer = true
+
+  // save reference to original Uint8Array get/set methods before overwriting
+  arr._get = arr.get
+  arr._set = arr.set
+
+  // deprecated, will be removed in node 0.13+
+  arr.get = BP.get
+  arr.set = BP.set
+
+  arr.write = BP.write
+  arr.toString = BP.toString
+  arr.toLocaleString = BP.toString
+  arr.toJSON = BP.toJSON
+  arr.copy = BP.copy
+  arr.slice = BP.slice
+  arr.readUInt8 = BP.readUInt8
+  arr.readUInt16LE = BP.readUInt16LE
+  arr.readUInt16BE = BP.readUInt16BE
+  arr.readUInt32LE = BP.readUInt32LE
+  arr.readUInt32BE = BP.readUInt32BE
+  arr.readInt8 = BP.readInt8
+  arr.readInt16LE = BP.readInt16LE
+  arr.readInt16BE = BP.readInt16BE
+  arr.readInt32LE = BP.readInt32LE
+  arr.readInt32BE = BP.readInt32BE
+  arr.readFloatLE = BP.readFloatLE
+  arr.readFloatBE = BP.readFloatBE
+  arr.readDoubleLE = BP.readDoubleLE
+  arr.readDoubleBE = BP.readDoubleBE
+  arr.writeUInt8 = BP.writeUInt8
+  arr.writeUInt16LE = BP.writeUInt16LE
+  arr.writeUInt16BE = BP.writeUInt16BE
+  arr.writeUInt32LE = BP.writeUInt32LE
+  arr.writeUInt32BE = BP.writeUInt32BE
+  arr.writeInt8 = BP.writeInt8
+  arr.writeInt16LE = BP.writeInt16LE
+  arr.writeInt16BE = BP.writeInt16BE
+  arr.writeInt32LE = BP.writeInt32LE
+  arr.writeInt32BE = BP.writeInt32BE
+  arr.writeFloatLE = BP.writeFloatLE
+  arr.writeFloatBE = BP.writeFloatBE
+  arr.writeDoubleLE = BP.writeDoubleLE
+  arr.writeDoubleBE = BP.writeDoubleBE
+  arr.fill = BP.fill
+  arr.inspect = BP.inspect
+  arr.toArrayBuffer = BP.toArrayBuffer
+
+  return arr
+}
+
+// slice(start, end)
+function clamp (index, len, defaultValue) {
+  if (typeof index !== 'number') return defaultValue
+  index = ~~index;  // Coerce to integer.
+  if (index >= len) return len
+  if (index >= 0) return index
+  index += len
+  if (index >= 0) return index
+  return 0
+}
+
+function coerce (length) {
+  // Coerce length to a number (possibly NaN), round up
+  // in case it's fractional (e.g. 123.456) then do a
+  // double negate to coerce a NaN to 0. Easy, right?
+  length = ~~Math.ceil(+length)
+  return length < 0 ? 0 : length
+}
+
+function isArray (subject) {
+  return (Array.isArray || function (subject) {
+    return Object.prototype.toString.call(subject) === '[object Array]'
+  })(subject)
+}
+
+function isArrayish (subject) {
+  return isArray(subject) || Buffer.isBuffer(subject) ||
+      subject && typeof subject === 'object' &&
+      typeof subject.length === 'number'
+}
+
+function toHex (n) {
+  if (n < 16) return '0' + n.toString(16)
+  return n.toString(16)
+}
+
+function utf8ToBytes (str) {
+  var byteArray = []
+  for (var i = 0; i < str.length; i++) {
+    var b = str.charCodeAt(i)
+    if (b <= 0x7F)
+      byteArray.push(str.charCodeAt(i))
+    else {
+      var start = i
+      if (b >= 0xD800 && b <= 0xDFFF) i++
+      var h = encodeURIComponent(str.slice(start, i+1)).substr(1).split('%')
+      for (var j = 0; j < h.length; j++)
+        byteArray.push(parseInt(h[j], 16))
+    }
+  }
+  return byteArray
+}
+
+function asciiToBytes (str) {
+  var byteArray = []
+  for (var i = 0; i < str.length; i++) {
+    // Node's code seems to be doing this and not & 0x7F..
+    byteArray.push(str.charCodeAt(i) & 0xFF)
+  }
+  return byteArray
+}
+
+function utf16leToBytes (str) {
+  var c, hi, lo
+  var byteArray = []
+  for (var i = 0; i < str.length; i++) {
+    c = str.charCodeAt(i)
+    hi = c >> 8
+    lo = c % 256
+    byteArray.push(lo)
+    byteArray.push(hi)
+  }
+
+  return byteArray
+}
+
+function base64ToBytes (str) {
+  return base64.toByteArray(str)
+}
+
+function blitBuffer (src, dst, offset, length) {
+  var pos
+  for (var i = 0; i < length; i++) {
+    if ((i + offset >= dst.length) || (i >= src.length))
+      break
+    dst[i + offset] = src[i]
+  }
+  return i
+}
+
+function decodeUtf8Char (str) {
+  try {
+    return decodeURIComponent(str)
+  } catch (err) {
+    return String.fromCharCode(0xFFFD) // UTF 8 invalid char
+  }
+}
+
+/*
+ * We have to make sure that the value is a valid integer. This means that it
+ * is non-negative. It has no fractional component and that it does not
+ * exceed the maximum allowed value.
+ */
+function verifuint (value, max) {
+  assert(typeof value === 'number', 'cannot write a non-number as a number')
+  assert(value >= 0, 'specified a negative value for writing an unsigned value')
+  assert(value <= max, 'value is larger than maximum value for type')
+  assert(Math.floor(value) === value, 'value has a fractional component')
+}
+
+function verifsint (value, max, min) {
+  assert(typeof value === 'number', 'cannot write a non-number as a number')
+  assert(value <= max, 'value larger than maximum allowed value')
+  assert(value >= min, 'value smaller than minimum allowed value')
+  assert(Math.floor(value) === value, 'value has a fractional component')
+}
+
+function verifIEEE754 (value, max, min) {
+  assert(typeof value === 'number', 'cannot write a non-number as a number')
+  assert(value <= max, 'value larger than maximum allowed value')
+  assert(value >= min, 'value smaller than minimum allowed value')
+}
+
+function assert (test, message) {
+  if (!test) throw new Error(message || 'Failed assertion')
+}
+
+},{"base64-js":71,"ieee754":72}],71:[function(_dereq_,module,exports){
+var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+;(function (exports) {
+	'use strict';
+
+  var Arr = (typeof Uint8Array !== 'undefined')
+    ? Uint8Array
+    : Array
+
+	var PLUS   = '+'.charCodeAt(0)
+	var SLASH  = '/'.charCodeAt(0)
+	var NUMBER = '0'.charCodeAt(0)
+	var LOWER  = 'a'.charCodeAt(0)
+	var UPPER  = 'A'.charCodeAt(0)
+
+	function decode (elt) {
+		var code = elt.charCodeAt(0)
+		if (code === PLUS)
+			return 62 // '+'
+		if (code === SLASH)
+			return 63 // '/'
+		if (code < NUMBER)
+			return -1 //no match
+		if (code < NUMBER + 10)
+			return code - NUMBER + 26 + 26
+		if (code < UPPER + 26)
+			return code - UPPER
+		if (code < LOWER + 26)
+			return code - LOWER + 26
+	}
+
+	function b64ToByteArray (b64) {
+		var i, j, l, tmp, placeHolders, arr
+
+		if (b64.length % 4 > 0) {
+			throw new Error('Invalid string. Length must be a multiple of 4')
+		}
+
+		// the number of equal signs (place holders)
+		// if there are two placeholders, than the two characters before it
+		// represent one byte
+		// if there is only one, then the three characters before it represent 2 bytes
+		// this is just a cheap hack to not do indexOf twice
+		var len = b64.length
+		placeHolders = '=' === b64.charAt(len - 2) ? 2 : '=' === b64.charAt(len - 1) ? 1 : 0
+
+		// base64 is 4/3 + up to two characters of the original data
+		arr = new Arr(b64.length * 3 / 4 - placeHolders)
+
+		// if there are placeholders, only get up to the last complete 4 chars
+		l = placeHolders > 0 ? b64.length - 4 : b64.length
+
+		var L = 0
+
+		function push (v) {
+			arr[L++] = v
+		}
+
+		for (i = 0, j = 0; i < l; i += 4, j += 3) {
+			tmp = (decode(b64.charAt(i)) << 18) | (decode(b64.charAt(i + 1)) << 12) | (decode(b64.charAt(i + 2)) << 6) | decode(b64.charAt(i + 3))
+			push((tmp & 0xFF0000) >> 16)
+			push((tmp & 0xFF00) >> 8)
+			push(tmp & 0xFF)
+		}
+
+		if (placeHolders === 2) {
+			tmp = (decode(b64.charAt(i)) << 2) | (decode(b64.charAt(i + 1)) >> 4)
+			push(tmp & 0xFF)
+		} else if (placeHolders === 1) {
+			tmp = (decode(b64.charAt(i)) << 10) | (decode(b64.charAt(i + 1)) << 4) | (decode(b64.charAt(i + 2)) >> 2)
+			push((tmp >> 8) & 0xFF)
+			push(tmp & 0xFF)
+		}
+
+		return arr
+	}
+
+	function uint8ToBase64 (uint8) {
+		var i,
+			extraBytes = uint8.length % 3, // if we have 1 byte left, pad 2 bytes
+			output = "",
+			temp, length
+
+		function encode (num) {
+			return lookup.charAt(num)
+		}
+
+		function tripletToBase64 (num) {
+			return encode(num >> 18 & 0x3F) + encode(num >> 12 & 0x3F) + encode(num >> 6 & 0x3F) + encode(num & 0x3F)
+		}
+
+		// go through the array every three bytes, we'll deal with trailing stuff later
+		for (i = 0, length = uint8.length - extraBytes; i < length; i += 3) {
+			temp = (uint8[i] << 16) + (uint8[i + 1] << 8) + (uint8[i + 2])
+			output += tripletToBase64(temp)
+		}
+
+		// pad the end with zeros, but make sure to not forget the extra bytes
+		switch (extraBytes) {
+			case 1:
+				temp = uint8[uint8.length - 1]
+				output += encode(temp >> 2)
+				output += encode((temp << 4) & 0x3F)
+				output += '=='
+				break
+			case 2:
+				temp = (uint8[uint8.length - 2] << 8) + (uint8[uint8.length - 1])
+				output += encode(temp >> 10)
+				output += encode((temp >> 4) & 0x3F)
+				output += encode((temp << 2) & 0x3F)
+				output += '='
+				break
+		}
+
+		return output
+	}
+
+	exports.toByteArray = b64ToByteArray
+	exports.fromByteArray = uint8ToBase64
+}(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
+
+},{}],72:[function(_dereq_,module,exports){
+exports.read = function(buffer, offset, isLE, mLen, nBytes) {
+  var e, m,
+      eLen = nBytes * 8 - mLen - 1,
+      eMax = (1 << eLen) - 1,
+      eBias = eMax >> 1,
+      nBits = -7,
+      i = isLE ? (nBytes - 1) : 0,
+      d = isLE ? -1 : 1,
+      s = buffer[offset + i];
+
+  i += d;
+
+  e = s & ((1 << (-nBits)) - 1);
+  s >>= (-nBits);
+  nBits += eLen;
+  for (; nBits > 0; e = e * 256 + buffer[offset + i], i += d, nBits -= 8);
+
+  m = e & ((1 << (-nBits)) - 1);
+  e >>= (-nBits);
+  nBits += mLen;
+  for (; nBits > 0; m = m * 256 + buffer[offset + i], i += d, nBits -= 8);
+
+  if (e === 0) {
+    e = 1 - eBias;
+  } else if (e === eMax) {
+    return m ? NaN : ((s ? -1 : 1) * Infinity);
+  } else {
+    m = m + Math.pow(2, mLen);
+    e = e - eBias;
+  }
+  return (s ? -1 : 1) * m * Math.pow(2, e - mLen);
+};
+
+exports.write = function(buffer, value, offset, isLE, mLen, nBytes) {
+  var e, m, c,
+      eLen = nBytes * 8 - mLen - 1,
+      eMax = (1 << eLen) - 1,
+      eBias = eMax >> 1,
+      rt = (mLen === 23 ? Math.pow(2, -24) - Math.pow(2, -77) : 0),
+      i = isLE ? 0 : (nBytes - 1),
+      d = isLE ? 1 : -1,
+      s = value < 0 || (value === 0 && 1 / value < 0) ? 1 : 0;
+
+  value = Math.abs(value);
+
+  if (isNaN(value) || value === Infinity) {
+    m = isNaN(value) ? 1 : 0;
+    e = eMax;
+  } else {
+    e = Math.floor(Math.log(value) / Math.LN2);
+    if (value * (c = Math.pow(2, -e)) < 1) {
+      e--;
+      c *= 2;
+    }
+    if (e + eBias >= 1) {
+      value += rt / c;
+    } else {
+      value += rt * Math.pow(2, 1 - eBias);
+    }
+    if (value * c >= 2) {
+      e++;
+      c /= 2;
+    }
+
+    if (e + eBias >= eMax) {
+      m = 0;
+      e = eMax;
+    } else if (e + eBias >= 1) {
+      m = (value * c - 1) * Math.pow(2, mLen);
+      e = e + eBias;
+    } else {
+      m = value * Math.pow(2, eBias - 1) * Math.pow(2, mLen);
+      e = 0;
+    }
+  }
+
+  for (; mLen >= 8; buffer[offset + i] = m & 0xff, i += d, m /= 256, mLen -= 8);
+
+  e = (e << mLen) | m;
+  eLen += mLen;
+  for (; eLen > 0; buffer[offset + i] = e & 0xff, i += d, e /= 256, eLen -= 8);
+
+  buffer[offset + i - d] |= s * 128;
+};
+
+},{}],73:[function(_dereq_,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+function EventEmitter() {
+  this._events = this._events || {};
+  this._maxListeners = this._maxListeners || undefined;
+}
+module.exports = EventEmitter;
+
+// Backwards-compat with node 0.10.x
+EventEmitter.EventEmitter = EventEmitter;
+
+EventEmitter.prototype._events = undefined;
+EventEmitter.prototype._maxListeners = undefined;
+
+// By default EventEmitters will print a warning if more than 10 listeners are
+// added to it. This is a useful default which helps finding memory leaks.
+EventEmitter.defaultMaxListeners = 10;
+
+// Obviously not all Emitters should be limited to 10. This function allows
+// that to be increased. Set to zero for unlimited.
+EventEmitter.prototype.setMaxListeners = function(n) {
+  if (!isNumber(n) || n < 0 || isNaN(n))
+    throw TypeError('n must be a positive number');
+  this._maxListeners = n;
+  return this;
+};
+
+EventEmitter.prototype.emit = function(type) {
+  var er, handler, len, args, i, listeners;
+
+  if (!this._events)
+    this._events = {};
+
+  // If there is no 'error' event listener then throw.
+  if (type === 'error') {
+    if (!this._events.error ||
+        (isObject(this._events.error) && !this._events.error.length)) {
+      er = arguments[1];
+      if (er instanceof Error) {
+        throw er; // Unhandled 'error' event
+      }
+      throw TypeError('Uncaught, unspecified "error" event.');
+    }
+  }
+
+  handler = this._events[type];
+
+  if (isUndefined(handler))
+    return false;
+
+  if (isFunction(handler)) {
+    switch (arguments.length) {
+      // fast cases
+      case 1:
+        handler.call(this);
+        break;
+      case 2:
+        handler.call(this, arguments[1]);
+        break;
+      case 3:
+        handler.call(this, arguments[1], arguments[2]);
+        break;
+      // slower
+      default:
+        len = arguments.length;
+        args = new Array(len - 1);
+        for (i = 1; i < len; i++)
+          args[i - 1] = arguments[i];
+        handler.apply(this, args);
+    }
+  } else if (isObject(handler)) {
+    len = arguments.length;
+    args = new Array(len - 1);
+    for (i = 1; i < len; i++)
+      args[i - 1] = arguments[i];
+
+    listeners = handler.slice();
+    len = listeners.length;
+    for (i = 0; i < len; i++)
+      listeners[i].apply(this, args);
+  }
+
+  return true;
+};
+
+EventEmitter.prototype.addListener = function(type, listener) {
+  var m;
+
+  if (!isFunction(listener))
+    throw TypeError('listener must be a function');
+
+  if (!this._events)
+    this._events = {};
+
+  // To avoid recursion in the case that type === "newListener"! Before
+  // adding it to the listeners, first emit "newListener".
+  if (this._events.newListener)
+    this.emit('newListener', type,
+              isFunction(listener.listener) ?
+              listener.listener : listener);
+
+  if (!this._events[type])
+    // Optimize the case of one listener. Don't need the extra array object.
+    this._events[type] = listener;
+  else if (isObject(this._events[type]))
+    // If we've already got an array, just append.
+    this._events[type].push(listener);
+  else
+    // Adding the second element, need to change to array.
+    this._events[type] = [this._events[type], listener];
+
+  // Check for listener leak
+  if (isObject(this._events[type]) && !this._events[type].warned) {
+    var m;
+    if (!isUndefined(this._maxListeners)) {
+      m = this._maxListeners;
+    } else {
+      m = EventEmitter.defaultMaxListeners;
+    }
+
+    if (m && m > 0 && this._events[type].length > m) {
+      this._events[type].warned = true;
+      console.error('(node) warning: possible EventEmitter memory ' +
+                    'leak detected. %d listeners added. ' +
+                    'Use emitter.setMaxListeners() to increase limit.',
+                    this._events[type].length);
+      if (typeof console.trace === 'function') {
+        // not supported in IE 10
+        console.trace();
+      }
+    }
+  }
+
+  return this;
+};
+
+EventEmitter.prototype.on = EventEmitter.prototype.addListener;
+
+EventEmitter.prototype.once = function(type, listener) {
+  if (!isFunction(listener))
+    throw TypeError('listener must be a function');
+
+  var fired = false;
+
+  function g() {
+    this.removeListener(type, g);
+
+    if (!fired) {
+      fired = true;
+      listener.apply(this, arguments);
+    }
+  }
+
+  g.listener = listener;
+  this.on(type, g);
+
+  return this;
+};
+
+// emits a 'removeListener' event iff the listener was removed
+EventEmitter.prototype.removeListener = function(type, listener) {
+  var list, position, length, i;
+
+  if (!isFunction(listener))
+    throw TypeError('listener must be a function');
+
+  if (!this._events || !this._events[type])
+    return this;
+
+  list = this._events[type];
+  length = list.length;
+  position = -1;
+
+  if (list === listener ||
+      (isFunction(list.listener) && list.listener === listener)) {
+    delete this._events[type];
+    if (this._events.removeListener)
+      this.emit('removeListener', type, listener);
+
+  } else if (isObject(list)) {
+    for (i = length; i-- > 0;) {
+      if (list[i] === listener ||
+          (list[i].listener && list[i].listener === listener)) {
+        position = i;
+        break;
+      }
+    }
+
+    if (position < 0)
+      return this;
+
+    if (list.length === 1) {
+      list.length = 0;
+      delete this._events[type];
+    } else {
+      list.splice(position, 1);
+    }
+
+    if (this._events.removeListener)
+      this.emit('removeListener', type, listener);
+  }
+
+  return this;
+};
+
+EventEmitter.prototype.removeAllListeners = function(type) {
+  var key, listeners;
+
+  if (!this._events)
+    return this;
+
+  // not listening for removeListener, no need to emit
+  if (!this._events.removeListener) {
+    if (arguments.length === 0)
+      this._events = {};
+    else if (this._events[type])
+      delete this._events[type];
+    return this;
+  }
+
+  // emit removeListener for all listeners on all events
+  if (arguments.length === 0) {
+    for (key in this._events) {
+      if (key === 'removeListener') continue;
+      this.removeAllListeners(key);
+    }
+    this.removeAllListeners('removeListener');
+    this._events = {};
+    return this;
+  }
+
+  listeners = this._events[type];
+
+  if (isFunction(listeners)) {
+    this.removeListener(type, listeners);
+  } else {
+    // LIFO order
+    while (listeners.length)
+      this.removeListener(type, listeners[listeners.length - 1]);
+  }
+  delete this._events[type];
+
+  return this;
+};
+
+EventEmitter.prototype.listeners = function(type) {
+  var ret;
+  if (!this._events || !this._events[type])
+    ret = [];
+  else if (isFunction(this._events[type]))
+    ret = [this._events[type]];
+  else
+    ret = this._events[type].slice();
+  return ret;
+};
+
+EventEmitter.listenerCount = function(emitter, type) {
+  var ret;
+  if (!emitter._events || !emitter._events[type])
+    ret = 0;
+  else if (isFunction(emitter._events[type]))
+    ret = 1;
+  else
+    ret = emitter._events[type].length;
+  return ret;
+};
+
+function isFunction(arg) {
+  return typeof arg === 'function';
+}
+
+function isNumber(arg) {
+  return typeof arg === 'number';
+}
+
+function isObject(arg) {
+  return typeof arg === 'object' && arg !== null;
+}
+
+function isUndefined(arg) {
+  return arg === void 0;
+}
+
+},{}],74:[function(_dereq_,module,exports){
+var http = module.exports;
+var EventEmitter = _dereq_('events').EventEmitter;
+var Request = _dereq_('./lib/request');
+var url = _dereq_('url')
+
+http.request = function (params, cb) {
+    if (typeof params === 'string') {
+        params = url.parse(params)
+    }
+    if (!params) params = {};
+    if (!params.host && !params.port) {
+        params.port = parseInt(window.location.port, 10);
+    }
+    if (!params.host && params.hostname) {
+        params.host = params.hostname;
+    }
+    
+    if (!params.scheme) params.scheme = window.location.protocol.split(':')[0];
+    if (!params.host) {
+        params.host = window.location.hostname || window.location.host;
+    }
+    if (/:/.test(params.host)) {
+        if (!params.port) {
+            params.port = params.host.split(':')[1];
+        }
+        params.host = params.host.split(':')[0];
+    }
+    if (!params.port) params.port = params.scheme == 'https' ? 443 : 80;
+    
+    var req = new Request(new xhrHttp, params);
+    if (cb) req.on('response', cb);
+    return req;
+};
+
+http.get = function (params, cb) {
+    params.method = 'GET';
+    var req = http.request(params, cb);
+    req.end();
+    return req;
+};
+
+http.Agent = function () {};
+http.Agent.defaultMaxSockets = 4;
+
+var xhrHttp = (function () {
+    if (typeof window === 'undefined') {
+        throw new Error('no window object present');
+    }
+    else if (window.XMLHttpRequest) {
+        return window.XMLHttpRequest;
+    }
+    else if (window.ActiveXObject) {
+        var axs = [
+            'Msxml2.XMLHTTP.6.0',
+            'Msxml2.XMLHTTP.3.0',
+            'Microsoft.XMLHTTP'
+        ];
+        for (var i = 0; i < axs.length; i++) {
+            try {
+                var ax = new(window.ActiveXObject)(axs[i]);
+                return function () {
+                    if (ax) {
+                        var ax_ = ax;
+                        ax = null;
+                        return ax_;
+                    }
+                    else {
+                        return new(window.ActiveXObject)(axs[i]);
+                    }
+                };
+            }
+            catch (e) {}
+        }
+        throw new Error('ajax not supported in this browser')
+    }
+    else {
+        throw new Error('ajax not supported in this browser');
+    }
+})();
+
+http.STATUS_CODES = {
+    100 : 'Continue',
+    101 : 'Switching Protocols',
+    102 : 'Processing',                 // RFC 2518, obsoleted by RFC 4918
+    200 : 'OK',
+    201 : 'Created',
+    202 : 'Accepted',
+    203 : 'Non-Authoritative Information',
+    204 : 'No Content',
+    205 : 'Reset Content',
+    206 : 'Partial Content',
+    207 : 'Multi-Status',               // RFC 4918
+    300 : 'Multiple Choices',
+    301 : 'Moved Permanently',
+    302 : 'Moved Temporarily',
+    303 : 'See Other',
+    304 : 'Not Modified',
+    305 : 'Use Proxy',
+    307 : 'Temporary Redirect',
+    400 : 'Bad Request',
+    401 : 'Unauthorized',
+    402 : 'Payment Required',
+    403 : 'Forbidden',
+    404 : 'Not Found',
+    405 : 'Method Not Allowed',
+    406 : 'Not Acceptable',
+    407 : 'Proxy Authentication Required',
+    408 : 'Request Time-out',
+    409 : 'Conflict',
+    410 : 'Gone',
+    411 : 'Length Required',
+    412 : 'Precondition Failed',
+    413 : 'Request Entity Too Large',
+    414 : 'Request-URI Too Large',
+    415 : 'Unsupported Media Type',
+    416 : 'Requested Range Not Satisfiable',
+    417 : 'Expectation Failed',
+    418 : 'I\'m a teapot',              // RFC 2324
+    422 : 'Unprocessable Entity',       // RFC 4918
+    423 : 'Locked',                     // RFC 4918
+    424 : 'Failed Dependency',          // RFC 4918
+    425 : 'Unordered Collection',       // RFC 4918
+    426 : 'Upgrade Required',           // RFC 2817
+    428 : 'Precondition Required',      // RFC 6585
+    429 : 'Too Many Requests',          // RFC 6585
+    431 : 'Request Header Fields Too Large',// RFC 6585
+    500 : 'Internal Server Error',
+    501 : 'Not Implemented',
+    502 : 'Bad Gateway',
+    503 : 'Service Unavailable',
+    504 : 'Gateway Time-out',
+    505 : 'HTTP Version Not Supported',
+    506 : 'Variant Also Negotiates',    // RFC 2295
+    507 : 'Insufficient Storage',       // RFC 4918
+    509 : 'Bandwidth Limit Exceeded',
+    510 : 'Not Extended',               // RFC 2774
+    511 : 'Network Authentication Required' // RFC 6585
+};
+},{"./lib/request":75,"events":73,"url":92}],75:[function(_dereq_,module,exports){
+var Stream = _dereq_('stream');
+var Response = _dereq_('./response');
+var Base64 = _dereq_('Base64');
+var inherits = _dereq_('inherits');
+
+var Request = module.exports = function (xhr, params) {
+    var self = this;
+    self.writable = true;
+    self.xhr = xhr;
+    self.body = [];
+    
+    self.uri = (params.scheme || 'http') + '://'
+        + params.host
+        + (params.port ? ':' + params.port : '')
+        + (params.path || '/')
+    ;
+    
+    if (typeof params.withCredentials === 'undefined') {
+        params.withCredentials = true;
+    }
+
+    try { xhr.withCredentials = params.withCredentials }
+    catch (e) {}
+    
+    xhr.open(
+        params.method || 'GET',
+        self.uri,
+        true
+    );
+
+    self._headers = {};
+    
+    if (params.headers) {
+        var keys = objectKeys(params.headers);
+        for (var i = 0; i < keys.length; i++) {
+            var key = keys[i];
+            if (!self.isSafeRequestHeader(key)) continue;
+            var value = params.headers[key];
+            self.setHeader(key, value);
+        }
+    }
+    
+    if (params.auth) {
+        //basic auth
+        this.setHeader('Authorization', 'Basic ' + Base64.btoa(params.auth));
+    }
+
+    var res = new Response;
+    res.on('close', function () {
+        self.emit('close');
+    });
+    
+    res.on('ready', function () {
+        self.emit('response', res);
+    });
+    
+    xhr.onreadystatechange = function () {
+        // Fix for IE9 bug
+        // SCRIPT575: Could not complete the operation due to error c00c023f
+        // It happens when a request is aborted, calling the success callback anyway with readyState === 4
+        if (xhr.__aborted) return;
+        res.handle(xhr);
+    };
+};
+
+inherits(Request, Stream);
+
+Request.prototype.setHeader = function (key, value) {
+    this._headers[key.toLowerCase()] = value
+};
+
+Request.prototype.getHeader = function (key) {
+    return this._headers[key.toLowerCase()]
+};
+
+Request.prototype.removeHeader = function (key) {
+    delete this._headers[key.toLowerCase()]
+};
+
+Request.prototype.write = function (s) {
+    this.body.push(s);
+};
+
+Request.prototype.destroy = function (s) {
+    this.xhr.__aborted = true;
+    this.xhr.abort();
+    this.emit('close');
+};
+
+Request.prototype.end = function (s) {
+    if (s !== undefined) this.body.push(s);
+
+    var keys = objectKeys(this._headers);
+    for (var i = 0; i < keys.length; i++) {
+        var key = keys[i];
+        var value = this._headers[key];
+        if (isArray(value)) {
+            for (var j = 0; j < value.length; j++) {
+                this.xhr.setRequestHeader(key, value[j]);
+            }
+        }
+        else this.xhr.setRequestHeader(key, value)
+    }
+
+    if (this.body.length === 0) {
+        this.xhr.send('');
+    }
+    else if (typeof this.body[0] === 'string') {
+        this.xhr.send(this.body.join(''));
+    }
+    else if (isArray(this.body[0])) {
+        var body = [];
+        for (var i = 0; i < this.body.length; i++) {
+            body.push.apply(body, this.body[i]);
+        }
+        this.xhr.send(body);
+    }
+    else if (/Array/.test(Object.prototype.toString.call(this.body[0]))) {
+        var len = 0;
+        for (var i = 0; i < this.body.length; i++) {
+            len += this.body[i].length;
+        }
+        var body = new(this.body[0].constructor)(len);
+        var k = 0;
+        
+        for (var i = 0; i < this.body.length; i++) {
+            var b = this.body[i];
+            for (var j = 0; j < b.length; j++) {
+                body[k++] = b[j];
+            }
+        }
+        this.xhr.send(body);
+    }
+    else {
+        var body = '';
+        for (var i = 0; i < this.body.length; i++) {
+            body += this.body[i].toString();
+        }
+        this.xhr.send(body);
+    }
+};
+
+// Taken from http://dxr.mozilla.org/mozilla/mozilla-central/content/base/src/nsXMLHttpRequest.cpp.html
+Request.unsafeHeaders = [
+    "accept-charset",
+    "accept-encoding",
+    "access-control-request-headers",
+    "access-control-request-method",
+    "connection",
+    "content-length",
+    "cookie",
+    "cookie2",
+    "content-transfer-encoding",
+    "date",
+    "expect",
+    "host",
+    "keep-alive",
+    "origin",
+    "referer",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+    "user-agent",
+    "via"
+];
+
+Request.prototype.isSafeRequestHeader = function (headerName) {
+    if (!headerName) return false;
+    return indexOf(Request.unsafeHeaders, headerName.toLowerCase()) === -1;
+};
+
+var objectKeys = Object.keys || function (obj) {
+    var keys = [];
+    for (var key in obj) keys.push(key);
+    return keys;
+};
+
+var isArray = Array.isArray || function (xs) {
+    return Object.prototype.toString.call(xs) === '[object Array]';
+};
+
+var indexOf = function (xs, x) {
+    if (xs.indexOf) return xs.indexOf(x);
+    for (var i = 0; i < xs.length; i++) {
+        if (xs[i] === x) return i;
+    }
+    return -1;
+};
+
+},{"./response":76,"Base64":77,"inherits":78,"stream":85}],76:[function(_dereq_,module,exports){
+var Stream = _dereq_('stream');
+var util = _dereq_('util');
+
+var Response = module.exports = function (res) {
+    this.offset = 0;
+    this.readable = true;
+};
+
+util.inherits(Response, Stream);
+
+var capable = {
+    streaming : true,
+    status2 : true
+};
+
+function parseHeaders (res) {
+    var lines = res.getAllResponseHeaders().split(/\r?\n/);
+    var headers = {};
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+        if (line === '') continue;
+        
+        var m = line.match(/^([^:]+):\s*(.*)/);
+        if (m) {
+            var key = m[1].toLowerCase(), value = m[2];
+            
+            if (headers[key] !== undefined) {
+            
+                if (isArray(headers[key])) {
+                    headers[key].push(value);
+                }
+                else {
+                    headers[key] = [ headers[key], value ];
+                }
+            }
+            else {
+                headers[key] = value;
+            }
+        }
+        else {
+            headers[line] = true;
+        }
+    }
+    return headers;
+}
+
+Response.prototype.getResponse = function (xhr) {
+    var respType = String(xhr.responseType).toLowerCase();
+    if (respType === 'blob') return xhr.responseBlob || xhr.response;
+    if (respType === 'arraybuffer') return xhr.response;
+    return xhr.responseText;
+}
+
+Response.prototype.getHeader = function (key) {
+    return this.headers[key.toLowerCase()];
+};
+
+Response.prototype.handle = function (res) {
+    if (res.readyState === 2 && capable.status2) {
+        try {
+            this.statusCode = res.status;
+            this.headers = parseHeaders(res);
+        }
+        catch (err) {
+            capable.status2 = false;
+        }
+        
+        if (capable.status2) {
+            this.emit('ready');
+        }
+    }
+    else if (capable.streaming && res.readyState === 3) {
+        try {
+            if (!this.statusCode) {
+                this.statusCode = res.status;
+                this.headers = parseHeaders(res);
+                this.emit('ready');
+            }
+        }
+        catch (err) {}
+        
+        try {
+            this._emitData(res);
+        }
+        catch (err) {
+            capable.streaming = false;
+        }
+    }
+    else if (res.readyState === 4) {
+        if (!this.statusCode) {
+            this.statusCode = res.status;
+            this.emit('ready');
+        }
+        this._emitData(res);
+        
+        if (res.error) {
+            this.emit('error', this.getResponse(res));
+        }
+        else this.emit('end');
+        
+        this.emit('close');
+    }
+};
+
+Response.prototype._emitData = function (res) {
+    var respBody = this.getResponse(res);
+    if (respBody.toString().match(/ArrayBuffer/)) {
+        this.emit('data', new Uint8Array(respBody, this.offset));
+        this.offset = respBody.byteLength;
+        return;
+    }
+    if (respBody.length > this.offset) {
+        this.emit('data', respBody.slice(this.offset));
+        this.offset = respBody.length;
+    }
+};
+
+var isArray = Array.isArray || function (xs) {
+    return Object.prototype.toString.call(xs) === '[object Array]';
+};
+
+},{"stream":85,"util":94}],77:[function(_dereq_,module,exports){
+;(function () {
+
+  var object = typeof exports != 'undefined' ? exports : this; // #8: web workers
+  var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+
+  function InvalidCharacterError(message) {
+    this.message = message;
+  }
+  InvalidCharacterError.prototype = new Error;
+  InvalidCharacterError.prototype.name = 'InvalidCharacterError';
+
+  // encoder
+  // [https://gist.github.com/999166] by [https://github.com/nignag]
+  object.btoa || (
+  object.btoa = function (input) {
+    for (
+      // initialize result and counter
+      var block, charCode, idx = 0, map = chars, output = '';
+      // if the next input index does not exist:
+      //   change the mapping table to "="
+      //   check if d has no fractional digits
+      input.charAt(idx | 0) || (map = '=', idx % 1);
+      // "8 - idx % 1 * 8" generates the sequence 2, 4, 6, 8
+      output += map.charAt(63 & block >> 8 - idx % 1 * 8)
+    ) {
+      charCode = input.charCodeAt(idx += 3/4);
+      if (charCode > 0xFF) {
+        throw new InvalidCharacterError("'btoa' failed: The string to be encoded contains characters outside of the Latin1 range.");
+      }
+      block = block << 8 | charCode;
+    }
+    return output;
+  });
+
+  // decoder
+  // [https://gist.github.com/1020396] by [https://github.com/atk]
+  object.atob || (
+  object.atob = function (input) {
+    input = input.replace(/=+$/, '');
+    if (input.length % 4 == 1) {
+      throw new InvalidCharacterError("'atob' failed: The string to be decoded is not correctly encoded.");
+    }
+    for (
+      // initialize result and counters
+      var bc = 0, bs, buffer, idx = 0, output = '';
+      // get next character
+      buffer = input.charAt(idx++);
+      // character found in table? initialize bit storage and add its ascii value;
+      ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer,
+        // and if not first of each 4 characters,
+        // convert the first 8 bits to one ascii character
+        bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0
+    ) {
+      // try to find character in table (0-63, not found => -1)
+      buffer = chars.indexOf(buffer);
+    }
+    return output;
+  });
+
+}());
+
+},{}],78:[function(_dereq_,module,exports){
+if (typeof Object.create === 'function') {
+  // implementation from standard node.js 'util' module
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    ctor.prototype = Object.create(superCtor.prototype, {
+      constructor: {
+        value: ctor,
+        enumerable: false,
+        writable: true,
+        configurable: true
+      }
+    });
+  };
+} else {
+  // old school shim for old browsers
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    var TempCtor = function () {}
+    TempCtor.prototype = superCtor.prototype
+    ctor.prototype = new TempCtor()
+    ctor.prototype.constructor = ctor
+  }
+}
+
+},{}],79:[function(_dereq_,module,exports){
+// shim for using process in browser
+
+var process = module.exports = {};
+
+process.nextTick = (function () {
+    var canSetImmediate = typeof window !== 'undefined'
+    && window.setImmediate;
+    var canPost = typeof window !== 'undefined'
+    && window.postMessage && window.addEventListener
+    ;
+
+    if (canSetImmediate) {
+        return function (f) { return window.setImmediate(f) };
+    }
+
+    if (canPost) {
+        var queue = [];
+        window.addEventListener('message', function (ev) {
+            var source = ev.source;
+            if ((source === window || source === null) && ev.data === 'process-tick') {
+                ev.stopPropagation();
+                if (queue.length > 0) {
+                    var fn = queue.shift();
+                    fn();
+                }
+            }
+        }, true);
+
+        return function nextTick(fn) {
+            queue.push(fn);
+            window.postMessage('process-tick', '*');
+        };
+    }
+
+    return function nextTick(fn) {
+        setTimeout(fn, 0);
+    };
+})();
+
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+
+function noop() {}
+
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+}
+
+// TODO(shtylman)
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+
+},{}],80:[function(_dereq_,module,exports){
+(function (global){
+/*! http://mths.be/punycode v1.2.4 by @mathias */
+;(function(root) {
+
+	/** Detect free variables */
+	var freeExports = typeof exports == 'object' && exports;
+	var freeModule = typeof module == 'object' && module &&
+		module.exports == freeExports && module;
+	var freeGlobal = typeof global == 'object' && global;
+	if (freeGlobal.global === freeGlobal || freeGlobal.window === freeGlobal) {
+		root = freeGlobal;
+	}
+
+	/**
+	 * The `punycode` object.
+	 * @name punycode
+	 * @type Object
+	 */
+	var punycode,
+
+	/** Highest positive signed 32-bit float value */
+	maxInt = 2147483647, // aka. 0x7FFFFFFF or 2^31-1
+
+	/** Bootstring parameters */
+	base = 36,
+	tMin = 1,
+	tMax = 26,
+	skew = 38,
+	damp = 700,
+	initialBias = 72,
+	initialN = 128, // 0x80
+	delimiter = '-', // '\x2D'
+
+	/** Regular expressions */
+	regexPunycode = /^xn--/,
+	regexNonASCII = /[^ -~]/, // unprintable ASCII chars + non-ASCII chars
+	regexSeparators = /\x2E|\u3002|\uFF0E|\uFF61/g, // RFC 3490 separators
+
+	/** Error messages */
+	errors = {
+		'overflow': 'Overflow: input needs wider integers to process',
+		'not-basic': 'Illegal input >= 0x80 (not a basic code point)',
+		'invalid-input': 'Invalid input'
+	},
+
+	/** Convenience shortcuts */
+	baseMinusTMin = base - tMin,
+	floor = Math.floor,
+	stringFromCharCode = String.fromCharCode,
+
+	/** Temporary variable */
+	key;
+
+	/*--------------------------------------------------------------------------*/
+
+	/**
+	 * A generic error utility function.
+	 * @private
+	 * @param {String} type The error type.
+	 * @returns {Error} Throws a `RangeError` with the applicable error message.
+	 */
+	function error(type) {
+		throw RangeError(errors[type]);
+	}
+
+	/**
+	 * A generic `Array#map` utility function.
+	 * @private
+	 * @param {Array} array The array to iterate over.
+	 * @param {Function} callback The function that gets called for every array
+	 * item.
+	 * @returns {Array} A new array of values returned by the callback function.
+	 */
+	function map(array, fn) {
+		var length = array.length;
+		while (length--) {
+			array[length] = fn(array[length]);
+		}
+		return array;
+	}
+
+	/**
+	 * A simple `Array#map`-like wrapper to work with domain name strings.
+	 * @private
+	 * @param {String} domain The domain name.
+	 * @param {Function} callback The function that gets called for every
+	 * character.
+	 * @returns {Array} A new string of characters returned by the callback
+	 * function.
+	 */
+	function mapDomain(string, fn) {
+		return map(string.split(regexSeparators), fn).join('.');
+	}
+
+	/**
+	 * Creates an array containing the numeric code points of each Unicode
+	 * character in the string. While JavaScript uses UCS-2 internally,
+	 * this function will convert a pair of surrogate halves (each of which
+	 * UCS-2 exposes as separate characters) into a single code point,
+	 * matching UTF-16.
+	 * @see `punycode.ucs2.encode`
+	 * @see <http://mathiasbynens.be/notes/javascript-encoding>
+	 * @memberOf punycode.ucs2
+	 * @name decode
+	 * @param {String} string The Unicode input string (UCS-2).
+	 * @returns {Array} The new array of code points.
+	 */
+	function ucs2decode(string) {
+		var output = [],
+		    counter = 0,
+		    length = string.length,
+		    value,
+		    extra;
+		while (counter < length) {
+			value = string.charCodeAt(counter++);
+			if (value >= 0xD800 && value <= 0xDBFF && counter < length) {
+				// high surrogate, and there is a next character
+				extra = string.charCodeAt(counter++);
+				if ((extra & 0xFC00) == 0xDC00) { // low surrogate
+					output.push(((value & 0x3FF) << 10) + (extra & 0x3FF) + 0x10000);
+				} else {
+					// unmatched surrogate; only append this code unit, in case the next
+					// code unit is the high surrogate of a surrogate pair
+					output.push(value);
+					counter--;
+				}
+			} else {
+				output.push(value);
+			}
+		}
+		return output;
+	}
+
+	/**
+	 * Creates a string based on an array of numeric code points.
+	 * @see `punycode.ucs2.decode`
+	 * @memberOf punycode.ucs2
+	 * @name encode
+	 * @param {Array} codePoints The array of numeric code points.
+	 * @returns {String} The new Unicode string (UCS-2).
+	 */
+	function ucs2encode(array) {
+		return map(array, function(value) {
+			var output = '';
+			if (value > 0xFFFF) {
+				value -= 0x10000;
+				output += stringFromCharCode(value >>> 10 & 0x3FF | 0xD800);
+				value = 0xDC00 | value & 0x3FF;
+			}
+			output += stringFromCharCode(value);
+			return output;
+		}).join('');
+	}
+
+	/**
+	 * Converts a basic code point into a digit/integer.
+	 * @see `digitToBasic()`
+	 * @private
+	 * @param {Number} codePoint The basic numeric code point value.
+	 * @returns {Number} The numeric value of a basic code point (for use in
+	 * representing integers) in the range `0` to `base - 1`, or `base` if
+	 * the code point does not represent a value.
+	 */
+	function basicToDigit(codePoint) {
+		if (codePoint - 48 < 10) {
+			return codePoint - 22;
+		}
+		if (codePoint - 65 < 26) {
+			return codePoint - 65;
+		}
+		if (codePoint - 97 < 26) {
+			return codePoint - 97;
+		}
+		return base;
+	}
+
+	/**
+	 * Converts a digit/integer into a basic code point.
+	 * @see `basicToDigit()`
+	 * @private
+	 * @param {Number} digit The numeric value of a basic code point.
+	 * @returns {Number} The basic code point whose value (when used for
+	 * representing integers) is `digit`, which needs to be in the range
+	 * `0` to `base - 1`. If `flag` is non-zero, the uppercase form is
+	 * used; else, the lowercase form is used. The behavior is undefined
+	 * if `flag` is non-zero and `digit` has no uppercase form.
+	 */
+	function digitToBasic(digit, flag) {
+		//  0..25 map to ASCII a..z or A..Z
+		// 26..35 map to ASCII 0..9
+		return digit + 22 + 75 * (digit < 26) - ((flag != 0) << 5);
+	}
+
+	/**
+	 * Bias adaptation function as per section 3.4 of RFC 3492.
+	 * http://tools.ietf.org/html/rfc3492#section-3.4
+	 * @private
+	 */
+	function adapt(delta, numPoints, firstTime) {
+		var k = 0;
+		delta = firstTime ? floor(delta / damp) : delta >> 1;
+		delta += floor(delta / numPoints);
+		for (/* no initialization */; delta > baseMinusTMin * tMax >> 1; k += base) {
+			delta = floor(delta / baseMinusTMin);
+		}
+		return floor(k + (baseMinusTMin + 1) * delta / (delta + skew));
+	}
+
+	/**
+	 * Converts a Punycode string of ASCII-only symbols to a string of Unicode
+	 * symbols.
+	 * @memberOf punycode
+	 * @param {String} input The Punycode string of ASCII-only symbols.
+	 * @returns {String} The resulting string of Unicode symbols.
+	 */
+	function decode(input) {
+		// Don't use UCS-2
+		var output = [],
+		    inputLength = input.length,
+		    out,
+		    i = 0,
+		    n = initialN,
+		    bias = initialBias,
+		    basic,
+		    j,
+		    index,
+		    oldi,
+		    w,
+		    k,
+		    digit,
+		    t,
+		    /** Cached calculation results */
+		    baseMinusT;
+
+		// Handle the basic code points: let `basic` be the number of input code
+		// points before the last delimiter, or `0` if there is none, then copy
+		// the first basic code points to the output.
+
+		basic = input.lastIndexOf(delimiter);
+		if (basic < 0) {
+			basic = 0;
+		}
+
+		for (j = 0; j < basic; ++j) {
+			// if it's not a basic code point
+			if (input.charCodeAt(j) >= 0x80) {
+				error('not-basic');
+			}
+			output.push(input.charCodeAt(j));
+		}
+
+		// Main decoding loop: start just after the last delimiter if any basic code
+		// points were copied; start at the beginning otherwise.
+
+		for (index = basic > 0 ? basic + 1 : 0; index < inputLength; /* no final expression */) {
+
+			// `index` is the index of the next character to be consumed.
+			// Decode a generalized variable-length integer into `delta`,
+			// which gets added to `i`. The overflow checking is easier
+			// if we increase `i` as we go, then subtract off its starting
+			// value at the end to obtain `delta`.
+			for (oldi = i, w = 1, k = base; /* no condition */; k += base) {
+
+				if (index >= inputLength) {
+					error('invalid-input');
+				}
+
+				digit = basicToDigit(input.charCodeAt(index++));
+
+				if (digit >= base || digit > floor((maxInt - i) / w)) {
+					error('overflow');
+				}
+
+				i += digit * w;
+				t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
+
+				if (digit < t) {
+					break;
+				}
+
+				baseMinusT = base - t;
+				if (w > floor(maxInt / baseMinusT)) {
+					error('overflow');
+				}
+
+				w *= baseMinusT;
+
+			}
+
+			out = output.length + 1;
+			bias = adapt(i - oldi, out, oldi == 0);
+
+			// `i` was supposed to wrap around from `out` to `0`,
+			// incrementing `n` each time, so we'll fix that now:
+			if (floor(i / out) > maxInt - n) {
+				error('overflow');
+			}
+
+			n += floor(i / out);
+			i %= out;
+
+			// Insert `n` at position `i` of the output
+			output.splice(i++, 0, n);
+
+		}
+
+		return ucs2encode(output);
+	}
+
+	/**
+	 * Converts a string of Unicode symbols to a Punycode string of ASCII-only
+	 * symbols.
+	 * @memberOf punycode
+	 * @param {String} input The string of Unicode symbols.
+	 * @returns {String} The resulting Punycode string of ASCII-only symbols.
+	 */
+	function encode(input) {
+		var n,
+		    delta,
+		    handledCPCount,
+		    basicLength,
+		    bias,
+		    j,
+		    m,
+		    q,
+		    k,
+		    t,
+		    currentValue,
+		    output = [],
+		    /** `inputLength` will hold the number of code points in `input`. */
+		    inputLength,
+		    /** Cached calculation results */
+		    handledCPCountPlusOne,
+		    baseMinusT,
+		    qMinusT;
+
+		// Convert the input in UCS-2 to Unicode
+		input = ucs2decode(input);
+
+		// Cache the length
+		inputLength = input.length;
+
+		// Initialize the state
+		n = initialN;
+		delta = 0;
+		bias = initialBias;
+
+		// Handle the basic code points
+		for (j = 0; j < inputLength; ++j) {
+			currentValue = input[j];
+			if (currentValue < 0x80) {
+				output.push(stringFromCharCode(currentValue));
+			}
+		}
+
+		handledCPCount = basicLength = output.length;
+
+		// `handledCPCount` is the number of code points that have been handled;
+		// `basicLength` is the number of basic code points.
+
+		// Finish the basic string - if it is not empty - with a delimiter
+		if (basicLength) {
+			output.push(delimiter);
+		}
+
+		// Main encoding loop:
+		while (handledCPCount < inputLength) {
+
+			// All non-basic code points < n have been handled already. Find the next
+			// larger one:
+			for (m = maxInt, j = 0; j < inputLength; ++j) {
+				currentValue = input[j];
+				if (currentValue >= n && currentValue < m) {
+					m = currentValue;
+				}
+			}
+
+			// Increase `delta` enough to advance the decoder's <n,i> state to <m,0>,
+			// but guard against overflow
+			handledCPCountPlusOne = handledCPCount + 1;
+			if (m - n > floor((maxInt - delta) / handledCPCountPlusOne)) {
+				error('overflow');
+			}
+
+			delta += (m - n) * handledCPCountPlusOne;
+			n = m;
+
+			for (j = 0; j < inputLength; ++j) {
+				currentValue = input[j];
+
+				if (currentValue < n && ++delta > maxInt) {
+					error('overflow');
+				}
+
+				if (currentValue == n) {
+					// Represent delta as a generalized variable-length integer
+					for (q = delta, k = base; /* no condition */; k += base) {
+						t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
+						if (q < t) {
+							break;
+						}
+						qMinusT = q - t;
+						baseMinusT = base - t;
+						output.push(
+							stringFromCharCode(digitToBasic(t + qMinusT % baseMinusT, 0))
+						);
+						q = floor(qMinusT / baseMinusT);
+					}
+
+					output.push(stringFromCharCode(digitToBasic(q, 0)));
+					bias = adapt(delta, handledCPCountPlusOne, handledCPCount == basicLength);
+					delta = 0;
+					++handledCPCount;
+				}
+			}
+
+			++delta;
+			++n;
+
+		}
+		return output.join('');
+	}
+
+	/**
+	 * Converts a Punycode string representing a domain name to Unicode. Only the
+	 * Punycoded parts of the domain name will be converted, i.e. it doesn't
+	 * matter if you call it on a string that has already been converted to
+	 * Unicode.
+	 * @memberOf punycode
+	 * @param {String} domain The Punycode domain name to convert to Unicode.
+	 * @returns {String} The Unicode representation of the given Punycode
+	 * string.
+	 */
+	function toUnicode(domain) {
+		return mapDomain(domain, function(string) {
+			return regexPunycode.test(string)
+				? decode(string.slice(4).toLowerCase())
+				: string;
+		});
+	}
+
+	/**
+	 * Converts a Unicode string representing a domain name to Punycode. Only the
+	 * non-ASCII parts of the domain name will be converted, i.e. it doesn't
+	 * matter if you call it with a domain that's already in ASCII.
+	 * @memberOf punycode
+	 * @param {String} domain The domain name to convert, as a Unicode string.
+	 * @returns {String} The Punycode representation of the given domain name.
+	 */
+	function toASCII(domain) {
+		return mapDomain(domain, function(string) {
+			return regexNonASCII.test(string)
+				? 'xn--' + encode(string)
+				: string;
+		});
+	}
+
+	/*--------------------------------------------------------------------------*/
+
+	/** Define the public API */
+	punycode = {
+		/**
+		 * A string representing the current Punycode.js version number.
+		 * @memberOf punycode
+		 * @type String
+		 */
+		'version': '1.2.4',
+		/**
+		 * An object of methods to convert from JavaScript's internal character
+		 * representation (UCS-2) to Unicode code points, and back.
+		 * @see <http://mathiasbynens.be/notes/javascript-encoding>
+		 * @memberOf punycode
+		 * @type Object
+		 */
+		'ucs2': {
+			'decode': ucs2decode,
+			'encode': ucs2encode
+		},
+		'decode': decode,
+		'encode': encode,
+		'toASCII': toASCII,
+		'toUnicode': toUnicode
+	};
+
+	/** Expose `punycode` */
+	// Some AMD build optimizers, like r.js, check for specific condition patterns
+	// like the following:
+	if (
+		typeof define == 'function' &&
+		typeof define.amd == 'object' &&
+		define.amd
+	) {
+		define('punycode', function() {
+			return punycode;
+		});
+	} else if (freeExports && !freeExports.nodeType) {
+		if (freeModule) { // in Node.js or RingoJS v0.8.0+
+			freeModule.exports = punycode;
+		} else { // in Narwhal or RingoJS v0.7.0-
+			for (key in punycode) {
+				punycode.hasOwnProperty(key) && (freeExports[key] = punycode[key]);
+			}
+		}
+	} else { // in Rhino or a web browser
+		root.punycode = punycode;
+	}
+
+}(this));
+
+}).call(this,typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],81:[function(_dereq_,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+'use strict';
+
+// If obj.hasOwnProperty has been overridden, then calling
+// obj.hasOwnProperty(prop) will break.
+// See: https://github.com/joyent/node/issues/1707
+function hasOwnProperty(obj, prop) {
+  return Object.prototype.hasOwnProperty.call(obj, prop);
+}
+
+module.exports = function(qs, sep, eq, options) {
+  sep = sep || '&';
+  eq = eq || '=';
+  var obj = {};
+
+  if (typeof qs !== 'string' || qs.length === 0) {
+    return obj;
+  }
+
+  var regexp = /\+/g;
+  qs = qs.split(sep);
+
+  var maxKeys = 1000;
+  if (options && typeof options.maxKeys === 'number') {
+    maxKeys = options.maxKeys;
+  }
+
+  var len = qs.length;
+  // maxKeys <= 0 means that we should not limit keys count
+  if (maxKeys > 0 && len > maxKeys) {
+    len = maxKeys;
+  }
+
+  for (var i = 0; i < len; ++i) {
+    var x = qs[i].replace(regexp, '%20'),
+        idx = x.indexOf(eq),
+        kstr, vstr, k, v;
+
+    if (idx >= 0) {
+      kstr = x.substr(0, idx);
+      vstr = x.substr(idx + 1);
+    } else {
+      kstr = x;
+      vstr = '';
+    }
+
+    k = decodeURIComponent(kstr);
+    v = decodeURIComponent(vstr);
+
+    if (!hasOwnProperty(obj, k)) {
+      obj[k] = v;
+    } else if (isArray(obj[k])) {
+      obj[k].push(v);
+    } else {
+      obj[k] = [obj[k], v];
+    }
+  }
+
+  return obj;
+};
+
+var isArray = Array.isArray || function (xs) {
+  return Object.prototype.toString.call(xs) === '[object Array]';
+};
+
+},{}],82:[function(_dereq_,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+'use strict';
+
+var stringifyPrimitive = function(v) {
+  switch (typeof v) {
+    case 'string':
+      return v;
+
+    case 'boolean':
+      return v ? 'true' : 'false';
+
+    case 'number':
+      return isFinite(v) ? v : '';
+
+    default:
+      return '';
+  }
+};
+
+module.exports = function(obj, sep, eq, name) {
+  sep = sep || '&';
+  eq = eq || '=';
+  if (obj === null) {
+    obj = undefined;
+  }
+
+  if (typeof obj === 'object') {
+    return map(objectKeys(obj), function(k) {
+      var ks = encodeURIComponent(stringifyPrimitive(k)) + eq;
+      if (isArray(obj[k])) {
+        return obj[k].map(function(v) {
+          return ks + encodeURIComponent(stringifyPrimitive(v));
+        }).join(sep);
+      } else {
+        return ks + encodeURIComponent(stringifyPrimitive(obj[k]));
+      }
+    }).join(sep);
+
+  }
+
+  if (!name) return '';
+  return encodeURIComponent(stringifyPrimitive(name)) + eq +
+         encodeURIComponent(stringifyPrimitive(obj));
+};
+
+var isArray = Array.isArray || function (xs) {
+  return Object.prototype.toString.call(xs) === '[object Array]';
+};
+
+function map (xs, f) {
+  if (xs.map) return xs.map(f);
+  var res = [];
+  for (var i = 0; i < xs.length; i++) {
+    res.push(f(xs[i], i));
+  }
+  return res;
+}
+
+var objectKeys = Object.keys || function (obj) {
+  var res = [];
+  for (var key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) res.push(key);
+  }
+  return res;
+};
+
+},{}],83:[function(_dereq_,module,exports){
+'use strict';
+
+exports.decode = exports.parse = _dereq_('./decode');
+exports.encode = exports.stringify = _dereq_('./encode');
+
+},{"./decode":81,"./encode":82}],84:[function(_dereq_,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+// a duplex stream is just a stream that is both readable and writable.
+// Since JS doesn't have multiple prototypal inheritance, this class
+// prototypally inherits from Readable, and then parasitically from
+// Writable.
+
+module.exports = Duplex;
+var inherits = _dereq_('inherits');
+var setImmediate = _dereq_('process/browser.js').nextTick;
+var Readable = _dereq_('./readable.js');
+var Writable = _dereq_('./writable.js');
+
+inherits(Duplex, Readable);
+
+Duplex.prototype.write = Writable.prototype.write;
+Duplex.prototype.end = Writable.prototype.end;
+Duplex.prototype._write = Writable.prototype._write;
+
+function Duplex(options) {
+  if (!(this instanceof Duplex))
+    return new Duplex(options);
+
+  Readable.call(this, options);
+  Writable.call(this, options);
+
+  if (options && options.readable === false)
+    this.readable = false;
+
+  if (options && options.writable === false)
+    this.writable = false;
+
+  this.allowHalfOpen = true;
+  if (options && options.allowHalfOpen === false)
+    this.allowHalfOpen = false;
+
+  this.once('end', onend);
+}
+
+// the no-half-open enforcer
+function onend() {
+  // if we allow half-open state, or if the writable side ended,
+  // then we're ok.
+  if (this.allowHalfOpen || this._writableState.ended)
+    return;
+
+  // no more data can be written.
+  // But allow more writes to happen in this tick.
+  var self = this;
+  setImmediate(function () {
+    self.end();
+  });
+}
+
+},{"./readable.js":88,"./writable.js":90,"inherits":78,"process/browser.js":86}],85:[function(_dereq_,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+module.exports = Stream;
+
+var EE = _dereq_('events').EventEmitter;
+var inherits = _dereq_('inherits');
+
+inherits(Stream, EE);
+Stream.Readable = _dereq_('./readable.js');
+Stream.Writable = _dereq_('./writable.js');
+Stream.Duplex = _dereq_('./duplex.js');
+Stream.Transform = _dereq_('./transform.js');
+Stream.PassThrough = _dereq_('./passthrough.js');
+
+// Backwards-compat with node 0.4.x
+Stream.Stream = Stream;
+
+
+
+// old-style streams.  Note that the pipe method (the only relevant
+// part of this class) is overridden in the Readable class.
+
+function Stream() {
+  EE.call(this);
+}
+
+Stream.prototype.pipe = function(dest, options) {
+  var source = this;
+
+  function ondata(chunk) {
+    if (dest.writable) {
+      if (false === dest.write(chunk) && source.pause) {
+        source.pause();
+      }
+    }
+  }
+
+  source.on('data', ondata);
+
+  function ondrain() {
+    if (source.readable && source.resume) {
+      source.resume();
+    }
+  }
+
+  dest.on('drain', ondrain);
+
+  // If the 'end' option is not supplied, dest.end() will be called when
+  // source gets the 'end' or 'close' events.  Only dest.end() once.
+  if (!dest._isStdio && (!options || options.end !== false)) {
+    source.on('end', onend);
+    source.on('close', onclose);
+  }
+
+  var didOnEnd = false;
+  function onend() {
+    if (didOnEnd) return;
+    didOnEnd = true;
+
+    dest.end();
+  }
+
+
+  function onclose() {
+    if (didOnEnd) return;
+    didOnEnd = true;
+
+    if (typeof dest.destroy === 'function') dest.destroy();
+  }
+
+  // don't leave dangling pipes when there are errors.
+  function onerror(er) {
+    cleanup();
+    if (EE.listenerCount(this, 'error') === 0) {
+      throw er; // Unhandled stream error in pipe.
+    }
+  }
+
+  source.on('error', onerror);
+  dest.on('error', onerror);
+
+  // remove all the event listeners that were added.
+  function cleanup() {
+    source.removeListener('data', ondata);
+    dest.removeListener('drain', ondrain);
+
+    source.removeListener('end', onend);
+    source.removeListener('close', onclose);
+
+    source.removeListener('error', onerror);
+    dest.removeListener('error', onerror);
+
+    source.removeListener('end', cleanup);
+    source.removeListener('close', cleanup);
+
+    dest.removeListener('close', cleanup);
+  }
+
+  source.on('end', cleanup);
+  source.on('close', cleanup);
+
+  dest.on('close', cleanup);
+
+  dest.emit('pipe', source);
+
+  // Allow for unix-like usage: A.pipe(B).pipe(C)
+  return dest;
+};
+
+},{"./duplex.js":84,"./passthrough.js":87,"./readable.js":88,"./transform.js":89,"./writable.js":90,"events":73,"inherits":78}],86:[function(_dereq_,module,exports){
+// shim for using process in browser
+
+var process = module.exports = {};
+
+process.nextTick = (function () {
+    var canSetImmediate = typeof window !== 'undefined'
+    && window.setImmediate;
+    var canPost = typeof window !== 'undefined'
+    && window.postMessage && window.addEventListener
+    ;
+
+    if (canSetImmediate) {
+        return function (f) { return window.setImmediate(f) };
+    }
+
+    if (canPost) {
+        var queue = [];
+        window.addEventListener('message', function (ev) {
+            var source = ev.source;
+            if ((source === window || source === null) && ev.data === 'process-tick') {
+                ev.stopPropagation();
+                if (queue.length > 0) {
+                    var fn = queue.shift();
+                    fn();
+                }
+            }
+        }, true);
+
+        return function nextTick(fn) {
+            queue.push(fn);
+            window.postMessage('process-tick', '*');
+        };
+    }
+
+    return function nextTick(fn) {
+        setTimeout(fn, 0);
+    };
+})();
+
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+}
+
+// TODO(shtylman)
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+
+},{}],87:[function(_dereq_,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+// a passthrough stream.
+// basically just the most minimal sort of Transform stream.
+// Every written chunk gets output as-is.
+
+module.exports = PassThrough;
+
+var Transform = _dereq_('./transform.js');
+var inherits = _dereq_('inherits');
+inherits(PassThrough, Transform);
+
+function PassThrough(options) {
+  if (!(this instanceof PassThrough))
+    return new PassThrough(options);
+
+  Transform.call(this, options);
+}
+
+PassThrough.prototype._transform = function(chunk, encoding, cb) {
+  cb(null, chunk);
+};
+
+},{"./transform.js":89,"inherits":78}],88:[function(_dereq_,module,exports){
+(function (process){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+module.exports = Readable;
+Readable.ReadableState = ReadableState;
+
+var EE = _dereq_('events').EventEmitter;
+var Stream = _dereq_('./index.js');
+var Buffer = _dereq_('buffer').Buffer;
+var setImmediate = _dereq_('process/browser.js').nextTick;
+var StringDecoder;
+
+var inherits = _dereq_('inherits');
+inherits(Readable, Stream);
+
+function ReadableState(options, stream) {
+  options = options || {};
+
+  // the point at which it stops calling _read() to fill the buffer
+  // Note: 0 is a valid value, means "don't call _read preemptively ever"
+  var hwm = options.highWaterMark;
+  this.highWaterMark = (hwm || hwm === 0) ? hwm : 16 * 1024;
+
+  // cast to ints.
+  this.highWaterMark = ~~this.highWaterMark;
+
+  this.buffer = [];
+  this.length = 0;
+  this.pipes = null;
+  this.pipesCount = 0;
+  this.flowing = false;
+  this.ended = false;
+  this.endEmitted = false;
+  this.reading = false;
+
+  // In streams that never have any data, and do push(null) right away,
+  // the consumer can miss the 'end' event if they do some I/O before
+  // consuming the stream.  So, we don't emit('end') until some reading
+  // happens.
+  this.calledRead = false;
+
+  // a flag to be able to tell if the onwrite cb is called immediately,
+  // or on a later tick.  We set this to true at first, becuase any
+  // actions that shouldn't happen until "later" should generally also
+  // not happen before the first write call.
+  this.sync = true;
+
+  // whenever we return null, then we set a flag to say
+  // that we're awaiting a 'readable' event emission.
+  this.needReadable = false;
+  this.emittedReadable = false;
+  this.readableListening = false;
+
+
+  // object stream flag. Used to make read(n) ignore n and to
+  // make all the buffer merging and length checks go away
+  this.objectMode = !!options.objectMode;
+
+  // Crypto is kind of old and crusty.  Historically, its default string
+  // encoding is 'binary' so we have to make this configurable.
+  // Everything else in the universe uses 'utf8', though.
+  this.defaultEncoding = options.defaultEncoding || 'utf8';
+
+  // when piping, we only care about 'readable' events that happen
+  // after read()ing all the bytes and not getting any pushback.
+  this.ranOut = false;
+
+  // the number of writers that are awaiting a drain event in .pipe()s
+  this.awaitDrain = 0;
+
+  // if true, a maybeReadMore has been scheduled
+  this.readingMore = false;
+
+  this.decoder = null;
+  this.encoding = null;
+  if (options.encoding) {
+    if (!StringDecoder)
+      StringDecoder = _dereq_('string_decoder').StringDecoder;
+    this.decoder = new StringDecoder(options.encoding);
+    this.encoding = options.encoding;
+  }
+}
+
+function Readable(options) {
+  if (!(this instanceof Readable))
+    return new Readable(options);
+
+  this._readableState = new ReadableState(options, this);
+
+  // legacy
+  this.readable = true;
+
+  Stream.call(this);
+}
+
+// Manually shove something into the read() buffer.
+// This returns true if the highWaterMark has not been hit yet,
+// similar to how Writable.write() returns true if you should
+// write() some more.
+Readable.prototype.push = function(chunk, encoding) {
+  var state = this._readableState;
+
+  if (typeof chunk === 'string' && !state.objectMode) {
+    encoding = encoding || state.defaultEncoding;
+    if (encoding !== state.encoding) {
+      chunk = new Buffer(chunk, encoding);
+      encoding = '';
+    }
+  }
+
+  return readableAddChunk(this, state, chunk, encoding, false);
+};
+
+// Unshift should *always* be something directly out of read()
+Readable.prototype.unshift = function(chunk) {
+  var state = this._readableState;
+  return readableAddChunk(this, state, chunk, '', true);
+};
+
+function readableAddChunk(stream, state, chunk, encoding, addToFront) {
+  var er = chunkInvalid(state, chunk);
+  if (er) {
+    stream.emit('error', er);
+  } else if (chunk === null || chunk === undefined) {
+    state.reading = false;
+    if (!state.ended)
+      onEofChunk(stream, state);
+  } else if (state.objectMode || chunk && chunk.length > 0) {
+    if (state.ended && !addToFront) {
+      var e = new Error('stream.push() after EOF');
+      stream.emit('error', e);
+    } else if (state.endEmitted && addToFront) {
+      var e = new Error('stream.unshift() after end event');
+      stream.emit('error', e);
+    } else {
+      if (state.decoder && !addToFront && !encoding)
+        chunk = state.decoder.write(chunk);
+
+      // update the buffer info.
+      state.length += state.objectMode ? 1 : chunk.length;
+      if (addToFront) {
+        state.buffer.unshift(chunk);
+      } else {
+        state.reading = false;
+        state.buffer.push(chunk);
+      }
+
+      if (state.needReadable)
+        emitReadable(stream);
+
+      maybeReadMore(stream, state);
+    }
+  } else if (!addToFront) {
+    state.reading = false;
+  }
+
+  return needMoreData(state);
+}
+
+
+
+// if it's past the high water mark, we can push in some more.
+// Also, if we have no data yet, we can stand some
+// more bytes.  This is to work around cases where hwm=0,
+// such as the repl.  Also, if the push() triggered a
+// readable event, and the user called read(largeNumber) such that
+// needReadable was set, then we ought to push more, so that another
+// 'readable' event will be triggered.
+function needMoreData(state) {
+  return !state.ended &&
+         (state.needReadable ||
+          state.length < state.highWaterMark ||
+          state.length === 0);
+}
+
+// backwards compatibility.
+Readable.prototype.setEncoding = function(enc) {
+  if (!StringDecoder)
+    StringDecoder = _dereq_('string_decoder').StringDecoder;
+  this._readableState.decoder = new StringDecoder(enc);
+  this._readableState.encoding = enc;
+};
+
+// Don't raise the hwm > 128MB
+var MAX_HWM = 0x800000;
+function roundUpToNextPowerOf2(n) {
+  if (n >= MAX_HWM) {
+    n = MAX_HWM;
+  } else {
+    // Get the next highest power of 2
+    n--;
+    for (var p = 1; p < 32; p <<= 1) n |= n >> p;
+    n++;
+  }
+  return n;
+}
+
+function howMuchToRead(n, state) {
+  if (state.length === 0 && state.ended)
+    return 0;
+
+  if (state.objectMode)
+    return n === 0 ? 0 : 1;
+
+  if (isNaN(n) || n === null) {
+    // only flow one buffer at a time
+    if (state.flowing && state.buffer.length)
+      return state.buffer[0].length;
+    else
+      return state.length;
+  }
+
+  if (n <= 0)
+    return 0;
+
+  // If we're asking for more than the target buffer level,
+  // then raise the water mark.  Bump up to the next highest
+  // power of 2, to prevent increasing it excessively in tiny
+  // amounts.
+  if (n > state.highWaterMark)
+    state.highWaterMark = roundUpToNextPowerOf2(n);
+
+  // don't have that much.  return null, unless we've ended.
+  if (n > state.length) {
+    if (!state.ended) {
+      state.needReadable = true;
+      return 0;
+    } else
+      return state.length;
+  }
+
+  return n;
+}
+
+// you can override either this method, or the async _read(n) below.
+Readable.prototype.read = function(n) {
+  var state = this._readableState;
+  state.calledRead = true;
+  var nOrig = n;
+
+  if (typeof n !== 'number' || n > 0)
+    state.emittedReadable = false;
+
+  // if we're doing read(0) to trigger a readable event, but we
+  // already have a bunch of data in the buffer, then just trigger
+  // the 'readable' event and move on.
+  if (n === 0 &&
+      state.needReadable &&
+      (state.length >= state.highWaterMark || state.ended)) {
+    emitReadable(this);
+    return null;
+  }
+
+  n = howMuchToRead(n, state);
+
+  // if we've ended, and we're now clear, then finish it up.
+  if (n === 0 && state.ended) {
+    if (state.length === 0)
+      endReadable(this);
+    return null;
+  }
+
+  // All the actual chunk generation logic needs to be
+  // *below* the call to _read.  The reason is that in certain
+  // synthetic stream cases, such as passthrough streams, _read
+  // may be a completely synchronous operation which may change
+  // the state of the read buffer, providing enough data when
+  // before there was *not* enough.
+  //
+  // So, the steps are:
+  // 1. Figure out what the state of things will be after we do
+  // a read from the buffer.
+  //
+  // 2. If that resulting state will trigger a _read, then call _read.
+  // Note that this may be asynchronous, or synchronous.  Yes, it is
+  // deeply ugly to write APIs this way, but that still doesn't mean
+  // that the Readable class should behave improperly, as streams are
+  // designed to be sync/async agnostic.
+  // Take note if the _read call is sync or async (ie, if the read call
+  // has returned yet), so that we know whether or not it's safe to emit
+  // 'readable' etc.
+  //
+  // 3. Actually pull the requested chunks out of the buffer and return.
+
+  // if we need a readable event, then we need to do some reading.
+  var doRead = state.needReadable;
+
+  // if we currently have less than the highWaterMark, then also read some
+  if (state.length - n <= state.highWaterMark)
+    doRead = true;
+
+  // however, if we've ended, then there's no point, and if we're already
+  // reading, then it's unnecessary.
+  if (state.ended || state.reading)
+    doRead = false;
+
+  if (doRead) {
+    state.reading = true;
+    state.sync = true;
+    // if the length is currently zero, then we *need* a readable event.
+    if (state.length === 0)
+      state.needReadable = true;
+    // call internal read method
+    this._read(state.highWaterMark);
+    state.sync = false;
+  }
+
+  // If _read called its callback synchronously, then `reading`
+  // will be false, and we need to re-evaluate how much data we
+  // can return to the user.
+  if (doRead && !state.reading)
+    n = howMuchToRead(nOrig, state);
+
+  var ret;
+  if (n > 0)
+    ret = fromList(n, state);
+  else
+    ret = null;
+
+  if (ret === null) {
+    state.needReadable = true;
+    n = 0;
+  }
+
+  state.length -= n;
+
+  // If we have nothing in the buffer, then we want to know
+  // as soon as we *do* get something into the buffer.
+  if (state.length === 0 && !state.ended)
+    state.needReadable = true;
+
+  // If we happened to read() exactly the remaining amount in the
+  // buffer, and the EOF has been seen at this point, then make sure
+  // that we emit 'end' on the very next tick.
+  if (state.ended && !state.endEmitted && state.length === 0)
+    endReadable(this);
+
+  return ret;
+};
+
+function chunkInvalid(state, chunk) {
+  var er = null;
+  if (!Buffer.isBuffer(chunk) &&
+      'string' !== typeof chunk &&
+      chunk !== null &&
+      chunk !== undefined &&
+      !state.objectMode &&
+      !er) {
+    er = new TypeError('Invalid non-string/buffer chunk');
+  }
+  return er;
+}
+
+
+function onEofChunk(stream, state) {
+  if (state.decoder && !state.ended) {
+    var chunk = state.decoder.end();
+    if (chunk && chunk.length) {
+      state.buffer.push(chunk);
+      state.length += state.objectMode ? 1 : chunk.length;
+    }
+  }
+  state.ended = true;
+
+  // if we've ended and we have some data left, then emit
+  // 'readable' now to make sure it gets picked up.
+  if (state.length > 0)
+    emitReadable(stream);
+  else
+    endReadable(stream);
+}
+
+// Don't emit readable right away in sync mode, because this can trigger
+// another read() call => stack overflow.  This way, it might trigger
+// a nextTick recursion warning, but that's not so bad.
+function emitReadable(stream) {
+  var state = stream._readableState;
+  state.needReadable = false;
+  if (state.emittedReadable)
+    return;
+
+  state.emittedReadable = true;
+  if (state.sync)
+    setImmediate(function() {
+      emitReadable_(stream);
+    });
+  else
+    emitReadable_(stream);
+}
+
+function emitReadable_(stream) {
+  stream.emit('readable');
+}
+
+
+// at this point, the user has presumably seen the 'readable' event,
+// and called read() to consume some data.  that may have triggered
+// in turn another _read(n) call, in which case reading = true if
+// it's in progress.
+// However, if we're not ended, or reading, and the length < hwm,
+// then go ahead and try to read some more preemptively.
+function maybeReadMore(stream, state) {
+  if (!state.readingMore) {
+    state.readingMore = true;
+    setImmediate(function() {
+      maybeReadMore_(stream, state);
+    });
+  }
+}
+
+function maybeReadMore_(stream, state) {
+  var len = state.length;
+  while (!state.reading && !state.flowing && !state.ended &&
+         state.length < state.highWaterMark) {
+    stream.read(0);
+    if (len === state.length)
+      // didn't get any data, stop spinning.
+      break;
+    else
+      len = state.length;
+  }
+  state.readingMore = false;
+}
+
+// abstract method.  to be overridden in specific implementation classes.
+// call cb(er, data) where data is <= n in length.
+// for virtual (non-string, non-buffer) streams, "length" is somewhat
+// arbitrary, and perhaps not very meaningful.
+Readable.prototype._read = function(n) {
+  this.emit('error', new Error('not implemented'));
+};
+
+Readable.prototype.pipe = function(dest, pipeOpts) {
+  var src = this;
+  var state = this._readableState;
+
+  switch (state.pipesCount) {
+    case 0:
+      state.pipes = dest;
+      break;
+    case 1:
+      state.pipes = [state.pipes, dest];
+      break;
+    default:
+      state.pipes.push(dest);
+      break;
+  }
+  state.pipesCount += 1;
+
+  var doEnd = (!pipeOpts || pipeOpts.end !== false) &&
+              dest !== process.stdout &&
+              dest !== process.stderr;
+
+  var endFn = doEnd ? onend : cleanup;
+  if (state.endEmitted)
+    setImmediate(endFn);
+  else
+    src.once('end', endFn);
+
+  dest.on('unpipe', onunpipe);
+  function onunpipe(readable) {
+    if (readable !== src) return;
+    cleanup();
+  }
+
+  function onend() {
+    dest.end();
+  }
+
+  // when the dest drains, it reduces the awaitDrain counter
+  // on the source.  This would be more elegant with a .once()
+  // handler in flow(), but adding and removing repeatedly is
+  // too slow.
+  var ondrain = pipeOnDrain(src);
+  dest.on('drain', ondrain);
+
+  function cleanup() {
+    // cleanup event handlers once the pipe is broken
+    dest.removeListener('close', onclose);
+    dest.removeListener('finish', onfinish);
+    dest.removeListener('drain', ondrain);
+    dest.removeListener('error', onerror);
+    dest.removeListener('unpipe', onunpipe);
+    src.removeListener('end', onend);
+    src.removeListener('end', cleanup);
+
+    // if the reader is waiting for a drain event from this
+    // specific writer, then it would cause it to never start
+    // flowing again.
+    // So, if this is awaiting a drain, then we just call it now.
+    // If we don't know, then assume that we are waiting for one.
+    if (!dest._writableState || dest._writableState.needDrain)
+      ondrain();
+  }
+
+  // if the dest has an error, then stop piping into it.
+  // however, don't suppress the throwing behavior for this.
+  // check for listeners before emit removes one-time listeners.
+  var errListeners = EE.listenerCount(dest, 'error');
+  function onerror(er) {
+    unpipe();
+    if (errListeners === 0 && EE.listenerCount(dest, 'error') === 0)
+      dest.emit('error', er);
+  }
+  dest.once('error', onerror);
+
+  // Both close and finish should trigger unpipe, but only once.
+  function onclose() {
+    dest.removeListener('finish', onfinish);
+    unpipe();
+  }
+  dest.once('close', onclose);
+  function onfinish() {
+    dest.removeListener('close', onclose);
+    unpipe();
+  }
+  dest.once('finish', onfinish);
+
+  function unpipe() {
+    src.unpipe(dest);
+  }
+
+  // tell the dest that it's being piped to
+  dest.emit('pipe', src);
+
+  // start the flow if it hasn't been started already.
+  if (!state.flowing) {
+    // the handler that waits for readable events after all
+    // the data gets sucked out in flow.
+    // This would be easier to follow with a .once() handler
+    // in flow(), but that is too slow.
+    this.on('readable', pipeOnReadable);
+
+    state.flowing = true;
+    setImmediate(function() {
+      flow(src);
+    });
+  }
+
+  return dest;
+};
+
+function pipeOnDrain(src) {
+  return function() {
+    var dest = this;
+    var state = src._readableState;
+    state.awaitDrain--;
+    if (state.awaitDrain === 0)
+      flow(src);
+  };
+}
+
+function flow(src) {
+  var state = src._readableState;
+  var chunk;
+  state.awaitDrain = 0;
+
+  function write(dest, i, list) {
+    var written = dest.write(chunk);
+    if (false === written) {
+      state.awaitDrain++;
+    }
+  }
+
+  while (state.pipesCount && null !== (chunk = src.read())) {
+
+    if (state.pipesCount === 1)
+      write(state.pipes, 0, null);
+    else
+      forEach(state.pipes, write);
+
+    src.emit('data', chunk);
+
+    // if anyone needs a drain, then we have to wait for that.
+    if (state.awaitDrain > 0)
+      return;
+  }
+
+  // if every destination was unpiped, either before entering this
+  // function, or in the while loop, then stop flowing.
+  //
+  // NB: This is a pretty rare edge case.
+  if (state.pipesCount === 0) {
+    state.flowing = false;
+
+    // if there were data event listeners added, then switch to old mode.
+    if (EE.listenerCount(src, 'data') > 0)
+      emitDataEvents(src);
+    return;
+  }
+
+  // at this point, no one needed a drain, so we just ran out of data
+  // on the next readable event, start it over again.
+  state.ranOut = true;
+}
+
+function pipeOnReadable() {
+  if (this._readableState.ranOut) {
+    this._readableState.ranOut = false;
+    flow(this);
+  }
+}
+
+
+Readable.prototype.unpipe = function(dest) {
+  var state = this._readableState;
+
+  // if we're not piping anywhere, then do nothing.
+  if (state.pipesCount === 0)
+    return this;
+
+  // just one destination.  most common case.
+  if (state.pipesCount === 1) {
+    // passed in one, but it's not the right one.
+    if (dest && dest !== state.pipes)
+      return this;
+
+    if (!dest)
+      dest = state.pipes;
+
+    // got a match.
+    state.pipes = null;
+    state.pipesCount = 0;
+    this.removeListener('readable', pipeOnReadable);
+    state.flowing = false;
+    if (dest)
+      dest.emit('unpipe', this);
+    return this;
+  }
+
+  // slow case. multiple pipe destinations.
+
+  if (!dest) {
+    // remove all.
+    var dests = state.pipes;
+    var len = state.pipesCount;
+    state.pipes = null;
+    state.pipesCount = 0;
+    this.removeListener('readable', pipeOnReadable);
+    state.flowing = false;
+
+    for (var i = 0; i < len; i++)
+      dests[i].emit('unpipe', this);
+    return this;
+  }
+
+  // try to find the right one.
+  var i = indexOf(state.pipes, dest);
+  if (i === -1)
+    return this;
+
+  state.pipes.splice(i, 1);
+  state.pipesCount -= 1;
+  if (state.pipesCount === 1)
+    state.pipes = state.pipes[0];
+
+  dest.emit('unpipe', this);
+
+  return this;
+};
+
+// set up data events if they are asked for
+// Ensure readable listeners eventually get something
+Readable.prototype.on = function(ev, fn) {
+  var res = Stream.prototype.on.call(this, ev, fn);
+
+  if (ev === 'data' && !this._readableState.flowing)
+    emitDataEvents(this);
+
+  if (ev === 'readable' && this.readable) {
+    var state = this._readableState;
+    if (!state.readableListening) {
+      state.readableListening = true;
+      state.emittedReadable = false;
+      state.needReadable = true;
+      if (!state.reading) {
+        this.read(0);
+      } else if (state.length) {
+        emitReadable(this, state);
+      }
+    }
+  }
+
+  return res;
+};
+Readable.prototype.addListener = Readable.prototype.on;
+
+// pause() and resume() are remnants of the legacy readable stream API
+// If the user uses them, then switch into old mode.
+Readable.prototype.resume = function() {
+  emitDataEvents(this);
+  this.read(0);
+  this.emit('resume');
+};
+
+Readable.prototype.pause = function() {
+  emitDataEvents(this, true);
+  this.emit('pause');
+};
+
+function emitDataEvents(stream, startPaused) {
+  var state = stream._readableState;
+
+  if (state.flowing) {
+    // https://github.com/isaacs/readable-stream/issues/16
+    throw new Error('Cannot switch to old mode now.');
+  }
+
+  var paused = startPaused || false;
+  var readable = false;
+
+  // convert to an old-style stream.
+  stream.readable = true;
+  stream.pipe = Stream.prototype.pipe;
+  stream.on = stream.addListener = Stream.prototype.on;
+
+  stream.on('readable', function() {
+    readable = true;
+
+    var c;
+    while (!paused && (null !== (c = stream.read())))
+      stream.emit('data', c);
+
+    if (c === null) {
+      readable = false;
+      stream._readableState.needReadable = true;
+    }
+  });
+
+  stream.pause = function() {
+    paused = true;
+    this.emit('pause');
+  };
+
+  stream.resume = function() {
+    paused = false;
+    if (readable)
+      setImmediate(function() {
+        stream.emit('readable');
+      });
+    else
+      this.read(0);
+    this.emit('resume');
+  };
+
+  // now make it start, just in case it hadn't already.
+  stream.emit('readable');
+}
+
+// wrap an old-style stream as the async data source.
+// This is *not* part of the readable stream interface.
+// It is an ugly unfortunate mess of history.
+Readable.prototype.wrap = function(stream) {
+  var state = this._readableState;
+  var paused = false;
+
+  var self = this;
+  stream.on('end', function() {
+    if (state.decoder && !state.ended) {
+      var chunk = state.decoder.end();
+      if (chunk && chunk.length)
+        self.push(chunk);
+    }
+
+    self.push(null);
+  });
+
+  stream.on('data', function(chunk) {
+    if (state.decoder)
+      chunk = state.decoder.write(chunk);
+    if (!chunk || !state.objectMode && !chunk.length)
+      return;
+
+    var ret = self.push(chunk);
+    if (!ret) {
+      paused = true;
+      stream.pause();
+    }
+  });
+
+  // proxy all the other methods.
+  // important when wrapping filters and duplexes.
+  for (var i in stream) {
+    if (typeof stream[i] === 'function' &&
+        typeof this[i] === 'undefined') {
+      this[i] = function(method) { return function() {
+        return stream[method].apply(stream, arguments);
+      }}(i);
+    }
+  }
+
+  // proxy certain important events.
+  var events = ['error', 'close', 'destroy', 'pause', 'resume'];
+  forEach(events, function(ev) {
+    stream.on(ev, function (x) {
+      return self.emit.apply(self, ev, x);
+    });
+  });
+
+  // when we try to consume some more bytes, simply unpause the
+  // underlying stream.
+  self._read = function(n) {
+    if (paused) {
+      paused = false;
+      stream.resume();
+    }
+  };
+
+  return self;
+};
+
+
+
+// exposed for testing purposes only.
+Readable._fromList = fromList;
+
+// Pluck off n bytes from an array of buffers.
+// Length is the combined lengths of all the buffers in the list.
+function fromList(n, state) {
+  var list = state.buffer;
+  var length = state.length;
+  var stringMode = !!state.decoder;
+  var objectMode = !!state.objectMode;
+  var ret;
+
+  // nothing in the list, definitely empty.
+  if (list.length === 0)
+    return null;
+
+  if (length === 0)
+    ret = null;
+  else if (objectMode)
+    ret = list.shift();
+  else if (!n || n >= length) {
+    // read it all, truncate the array.
+    if (stringMode)
+      ret = list.join('');
+    else
+      ret = Buffer.concat(list, length);
+    list.length = 0;
+  } else {
+    // read just some of it.
+    if (n < list[0].length) {
+      // just take a part of the first list item.
+      // slice is the same for buffers and strings.
+      var buf = list[0];
+      ret = buf.slice(0, n);
+      list[0] = buf.slice(n);
+    } else if (n === list[0].length) {
+      // first list is a perfect match
+      ret = list.shift();
+    } else {
+      // complex case.
+      // we have enough to cover it, but it spans past the first buffer.
+      if (stringMode)
+        ret = '';
+      else
+        ret = new Buffer(n);
+
+      var c = 0;
+      for (var i = 0, l = list.length; i < l && c < n; i++) {
+        var buf = list[0];
+        var cpy = Math.min(n - c, buf.length);
+
+        if (stringMode)
+          ret += buf.slice(0, cpy);
+        else
+          buf.copy(ret, c, 0, cpy);
+
+        if (cpy < buf.length)
+          list[0] = buf.slice(cpy);
+        else
+          list.shift();
+
+        c += cpy;
+      }
+    }
+  }
+
+  return ret;
+}
+
+function endReadable(stream) {
+  var state = stream._readableState;
+
+  // If we get here before consuming all the bytes, then that is a
+  // bug in node.  Should never happen.
+  if (state.length > 0)
+    throw new Error('endReadable called on non-empty stream');
+
+  if (!state.endEmitted && state.calledRead) {
+    state.ended = true;
+    setImmediate(function() {
+      // Check that we didn't get one last unshift.
+      if (!state.endEmitted && state.length === 0) {
+        state.endEmitted = true;
+        stream.readable = false;
+        stream.emit('end');
+      }
+    });
+  }
+}
+
+function forEach (xs, f) {
+  for (var i = 0, l = xs.length; i < l; i++) {
+    f(xs[i], i);
+  }
+}
+
+function indexOf (xs, x) {
+  for (var i = 0, l = xs.length; i < l; i++) {
+    if (xs[i] === x) return i;
+  }
+  return -1;
+}
+
+}).call(this,_dereq_("oMfpAn"))
+},{"./index.js":85,"buffer":70,"events":73,"inherits":78,"oMfpAn":79,"process/browser.js":86,"string_decoder":91}],89:[function(_dereq_,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+// a transform stream is a readable/writable stream where you do
+// something with the data.  Sometimes it's called a "filter",
+// but that's not a great name for it, since that implies a thing where
+// some bits pass through, and others are simply ignored.  (That would
+// be a valid example of a transform, of course.)
+//
+// While the output is causally related to the input, it's not a
+// necessarily symmetric or synchronous transformation.  For example,
+// a zlib stream might take multiple plain-text writes(), and then
+// emit a single compressed chunk some time in the future.
+//
+// Here's how this works:
+//
+// The Transform stream has all the aspects of the readable and writable
+// stream classes.  When you write(chunk), that calls _write(chunk,cb)
+// internally, and returns false if there's a lot of pending writes
+// buffered up.  When you call read(), that calls _read(n) until
+// there's enough pending readable data buffered up.
+//
+// In a transform stream, the written data is placed in a buffer.  When
+// _read(n) is called, it transforms the queued up data, calling the
+// buffered _write cb's as it consumes chunks.  If consuming a single
+// written chunk would result in multiple output chunks, then the first
+// outputted bit calls the readcb, and subsequent chunks just go into
+// the read buffer, and will cause it to emit 'readable' if necessary.
+//
+// This way, back-pressure is actually determined by the reading side,
+// since _read has to be called to start processing a new chunk.  However,
+// a pathological inflate type of transform can cause excessive buffering
+// here.  For example, imagine a stream where every byte of input is
+// interpreted as an integer from 0-255, and then results in that many
+// bytes of output.  Writing the 4 bytes {ff,ff,ff,ff} would result in
+// 1kb of data being output.  In this case, you could write a very small
+// amount of input, and end up with a very large amount of output.  In
+// such a pathological inflating mechanism, there'd be no way to tell
+// the system to stop doing the transform.  A single 4MB write could
+// cause the system to run out of memory.
+//
+// However, even in such a pathological case, only a single written chunk
+// would be consumed, and then the rest would wait (un-transformed) until
+// the results of the previous transformed chunk were consumed.
+
+module.exports = Transform;
+
+var Duplex = _dereq_('./duplex.js');
+var inherits = _dereq_('inherits');
+inherits(Transform, Duplex);
+
+
+function TransformState(options, stream) {
+  this.afterTransform = function(er, data) {
+    return afterTransform(stream, er, data);
+  };
+
+  this.needTransform = false;
+  this.transforming = false;
+  this.writecb = null;
+  this.writechunk = null;
+}
+
+function afterTransform(stream, er, data) {
+  var ts = stream._transformState;
+  ts.transforming = false;
+
+  var cb = ts.writecb;
+
+  if (!cb)
+    return stream.emit('error', new Error('no writecb in Transform class'));
+
+  ts.writechunk = null;
+  ts.writecb = null;
+
+  if (data !== null && data !== undefined)
+    stream.push(data);
+
+  if (cb)
+    cb(er);
+
+  var rs = stream._readableState;
+  rs.reading = false;
+  if (rs.needReadable || rs.length < rs.highWaterMark) {
+    stream._read(rs.highWaterMark);
+  }
+}
+
+
+function Transform(options) {
+  if (!(this instanceof Transform))
+    return new Transform(options);
+
+  Duplex.call(this, options);
+
+  var ts = this._transformState = new TransformState(options, this);
+
+  // when the writable side finishes, then flush out anything remaining.
+  var stream = this;
+
+  // start out asking for a readable event once data is transformed.
+  this._readableState.needReadable = true;
+
+  // we have implemented the _read method, and done the other things
+  // that Readable wants before the first _read call, so unset the
+  // sync guard flag.
+  this._readableState.sync = false;
+
+  this.once('finish', function() {
+    if ('function' === typeof this._flush)
+      this._flush(function(er) {
+        done(stream, er);
+      });
+    else
+      done(stream);
+  });
+}
+
+Transform.prototype.push = function(chunk, encoding) {
+  this._transformState.needTransform = false;
+  return Duplex.prototype.push.call(this, chunk, encoding);
+};
+
+// This is the part where you do stuff!
+// override this function in implementation classes.
+// 'chunk' is an input chunk.
+//
+// Call `push(newChunk)` to pass along transformed output
+// to the readable side.  You may call 'push' zero or more times.
+//
+// Call `cb(err)` when you are done with this chunk.  If you pass
+// an error, then that'll put the hurt on the whole operation.  If you
+// never call cb(), then you'll never get another chunk.
+Transform.prototype._transform = function(chunk, encoding, cb) {
+  throw new Error('not implemented');
+};
+
+Transform.prototype._write = function(chunk, encoding, cb) {
+  var ts = this._transformState;
+  ts.writecb = cb;
+  ts.writechunk = chunk;
+  ts.writeencoding = encoding;
+  if (!ts.transforming) {
+    var rs = this._readableState;
+    if (ts.needTransform ||
+        rs.needReadable ||
+        rs.length < rs.highWaterMark)
+      this._read(rs.highWaterMark);
+  }
+};
+
+// Doesn't matter what the args are here.
+// _transform does all the work.
+// That we got here means that the readable side wants more data.
+Transform.prototype._read = function(n) {
+  var ts = this._transformState;
+
+  if (ts.writechunk && ts.writecb && !ts.transforming) {
+    ts.transforming = true;
+    this._transform(ts.writechunk, ts.writeencoding, ts.afterTransform);
+  } else {
+    // mark that we need a transform, so that any data that comes in
+    // will get processed, now that we've asked for it.
+    ts.needTransform = true;
+  }
+};
+
+
+function done(stream, er) {
+  if (er)
+    return stream.emit('error', er);
+
+  // if there's nothing in the write buffer, then that means
+  // that nothing more will ever be provided
+  var ws = stream._writableState;
+  var rs = stream._readableState;
+  var ts = stream._transformState;
+
+  if (ws.length)
+    throw new Error('calling transform done when ws.length != 0');
+
+  if (ts.transforming)
+    throw new Error('calling transform done when still transforming');
+
+  return stream.push(null);
+}
+
+},{"./duplex.js":84,"inherits":78}],90:[function(_dereq_,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+// A bit simpler than readable streams.
+// Implement an async ._write(chunk, cb), and it'll handle all
+// the drain event emission and buffering.
+
+module.exports = Writable;
+Writable.WritableState = WritableState;
+
+var isUint8Array = typeof Uint8Array !== 'undefined'
+  ? function (x) { return x instanceof Uint8Array }
+  : function (x) {
+    return x && x.constructor && x.constructor.name === 'Uint8Array'
+  }
+;
+var isArrayBuffer = typeof ArrayBuffer !== 'undefined'
+  ? function (x) { return x instanceof ArrayBuffer }
+  : function (x) {
+    return x && x.constructor && x.constructor.name === 'ArrayBuffer'
+  }
+;
+
+var inherits = _dereq_('inherits');
+var Stream = _dereq_('./index.js');
+var setImmediate = _dereq_('process/browser.js').nextTick;
+var Buffer = _dereq_('buffer').Buffer;
+
+inherits(Writable, Stream);
+
+function WriteReq(chunk, encoding, cb) {
+  this.chunk = chunk;
+  this.encoding = encoding;
+  this.callback = cb;
+}
+
+function WritableState(options, stream) {
+  options = options || {};
+
+  // the point at which write() starts returning false
+  // Note: 0 is a valid value, means that we always return false if
+  // the entire buffer is not flushed immediately on write()
+  var hwm = options.highWaterMark;
+  this.highWaterMark = (hwm || hwm === 0) ? hwm : 16 * 1024;
+
+  // object stream flag to indicate whether or not this stream
+  // contains buffers or objects.
+  this.objectMode = !!options.objectMode;
+
+  // cast to ints.
+  this.highWaterMark = ~~this.highWaterMark;
+
+  this.needDrain = false;
+  // at the start of calling end()
+  this.ending = false;
+  // when end() has been called, and returned
+  this.ended = false;
+  // when 'finish' is emitted
+  this.finished = false;
+
+  // should we decode strings into buffers before passing to _write?
+  // this is here so that some node-core streams can optimize string
+  // handling at a lower level.
+  var noDecode = options.decodeStrings === false;
+  this.decodeStrings = !noDecode;
+
+  // Crypto is kind of old and crusty.  Historically, its default string
+  // encoding is 'binary' so we have to make this configurable.
+  // Everything else in the universe uses 'utf8', though.
+  this.defaultEncoding = options.defaultEncoding || 'utf8';
+
+  // not an actual buffer we keep track of, but a measurement
+  // of how much we're waiting to get pushed to some underlying
+  // socket or file.
+  this.length = 0;
+
+  // a flag to see when we're in the middle of a write.
+  this.writing = false;
+
+  // a flag to be able to tell if the onwrite cb is called immediately,
+  // or on a later tick.  We set this to true at first, becuase any
+  // actions that shouldn't happen until "later" should generally also
+  // not happen before the first write call.
+  this.sync = true;
+
+  // a flag to know if we're processing previously buffered items, which
+  // may call the _write() callback in the same tick, so that we don't
+  // end up in an overlapped onwrite situation.
+  this.bufferProcessing = false;
+
+  // the callback that's passed to _write(chunk,cb)
+  this.onwrite = function(er) {
+    onwrite(stream, er);
+  };
+
+  // the callback that the user supplies to write(chunk,encoding,cb)
+  this.writecb = null;
+
+  // the amount that is being written when _write is called.
+  this.writelen = 0;
+
+  this.buffer = [];
+}
+
+function Writable(options) {
+  // Writable ctor is applied to Duplexes, though they're not
+  // instanceof Writable, they're instanceof Readable.
+  if (!(this instanceof Writable) && !(this instanceof Stream.Duplex))
+    return new Writable(options);
+
+  this._writableState = new WritableState(options, this);
+
+  // legacy.
+  this.writable = true;
+
+  Stream.call(this);
+}
+
+// Otherwise people can pipe Writable streams, which is just wrong.
+Writable.prototype.pipe = function() {
+  this.emit('error', new Error('Cannot pipe. Not readable.'));
+};
+
+
+function writeAfterEnd(stream, state, cb) {
+  var er = new Error('write after end');
+  // TODO: defer error events consistently everywhere, not just the cb
+  stream.emit('error', er);
+  setImmediate(function() {
+    cb(er);
+  });
+}
+
+// If we get something that is not a buffer, string, null, or undefined,
+// and we're not in objectMode, then that's an error.
+// Otherwise stream chunks are all considered to be of length=1, and the
+// watermarks determine how many objects to keep in the buffer, rather than
+// how many bytes or characters.
+function validChunk(stream, state, chunk, cb) {
+  var valid = true;
+  if (!Buffer.isBuffer(chunk) &&
+      'string' !== typeof chunk &&
+      chunk !== null &&
+      chunk !== undefined &&
+      !state.objectMode) {
+    var er = new TypeError('Invalid non-string/buffer chunk');
+    stream.emit('error', er);
+    setImmediate(function() {
+      cb(er);
+    });
+    valid = false;
+  }
+  return valid;
+}
+
+Writable.prototype.write = function(chunk, encoding, cb) {
+  var state = this._writableState;
+  var ret = false;
+
+  if (typeof encoding === 'function') {
+    cb = encoding;
+    encoding = null;
+  }
+
+  if (!Buffer.isBuffer(chunk) && isUint8Array(chunk))
+    chunk = new Buffer(chunk);
+  if (isArrayBuffer(chunk) && typeof Uint8Array !== 'undefined')
+    chunk = new Buffer(new Uint8Array(chunk));
+  
+  if (Buffer.isBuffer(chunk))
+    encoding = 'buffer';
+  else if (!encoding)
+    encoding = state.defaultEncoding;
+
+  if (typeof cb !== 'function')
+    cb = function() {};
+
+  if (state.ended)
+    writeAfterEnd(this, state, cb);
+  else if (validChunk(this, state, chunk, cb))
+    ret = writeOrBuffer(this, state, chunk, encoding, cb);
+
+  return ret;
+};
+
+function decodeChunk(state, chunk, encoding) {
+  if (!state.objectMode &&
+      state.decodeStrings !== false &&
+      typeof chunk === 'string') {
+    chunk = new Buffer(chunk, encoding);
+  }
+  return chunk;
+}
+
+// if we're already writing something, then just put this
+// in the queue, and wait our turn.  Otherwise, call _write
+// If we return false, then we need a drain event, so set that flag.
+function writeOrBuffer(stream, state, chunk, encoding, cb) {
+  chunk = decodeChunk(state, chunk, encoding);
+  var len = state.objectMode ? 1 : chunk.length;
+
+  state.length += len;
+
+  var ret = state.length < state.highWaterMark;
+  state.needDrain = !ret;
+
+  if (state.writing)
+    state.buffer.push(new WriteReq(chunk, encoding, cb));
+  else
+    doWrite(stream, state, len, chunk, encoding, cb);
+
+  return ret;
+}
+
+function doWrite(stream, state, len, chunk, encoding, cb) {
+  state.writelen = len;
+  state.writecb = cb;
+  state.writing = true;
+  state.sync = true;
+  stream._write(chunk, encoding, state.onwrite);
+  state.sync = false;
+}
+
+function onwriteError(stream, state, sync, er, cb) {
+  if (sync)
+    setImmediate(function() {
+      cb(er);
+    });
+  else
+    cb(er);
+
+  stream.emit('error', er);
+}
+
+function onwriteStateUpdate(state) {
+  state.writing = false;
+  state.writecb = null;
+  state.length -= state.writelen;
+  state.writelen = 0;
+}
+
+function onwrite(stream, er) {
+  var state = stream._writableState;
+  var sync = state.sync;
+  var cb = state.writecb;
+
+  onwriteStateUpdate(state);
+
+  if (er)
+    onwriteError(stream, state, sync, er, cb);
+  else {
+    // Check if we're actually ready to finish, but don't emit yet
+    var finished = needFinish(stream, state);
+
+    if (!finished && !state.bufferProcessing && state.buffer.length)
+      clearBuffer(stream, state);
+
+    if (sync) {
+      setImmediate(function() {
+        afterWrite(stream, state, finished, cb);
+      });
+    } else {
+      afterWrite(stream, state, finished, cb);
+    }
+  }
+}
+
+function afterWrite(stream, state, finished, cb) {
+  if (!finished)
+    onwriteDrain(stream, state);
+  cb();
+  if (finished)
+    finishMaybe(stream, state);
+}
+
+// Must force callback to be called on nextTick, so that we don't
+// emit 'drain' before the write() consumer gets the 'false' return
+// value, and has a chance to attach a 'drain' listener.
+function onwriteDrain(stream, state) {
+  if (state.length === 0 && state.needDrain) {
+    state.needDrain = false;
+    stream.emit('drain');
+  }
+}
+
+
+// if there's something in the buffer waiting, then process it
+function clearBuffer(stream, state) {
+  state.bufferProcessing = true;
+
+  for (var c = 0; c < state.buffer.length; c++) {
+    var entry = state.buffer[c];
+    var chunk = entry.chunk;
+    var encoding = entry.encoding;
+    var cb = entry.callback;
+    var len = state.objectMode ? 1 : chunk.length;
+
+    doWrite(stream, state, len, chunk, encoding, cb);
+
+    // if we didn't call the onwrite immediately, then
+    // it means that we need to wait until it does.
+    // also, that means that the chunk and cb are currently
+    // being processed, so move the buffer counter past them.
+    if (state.writing) {
+      c++;
+      break;
+    }
+  }
+
+  state.bufferProcessing = false;
+  if (c < state.buffer.length)
+    state.buffer = state.buffer.slice(c);
+  else
+    state.buffer.length = 0;
+}
+
+Writable.prototype._write = function(chunk, encoding, cb) {
+  cb(new Error('not implemented'));
+};
+
+Writable.prototype.end = function(chunk, encoding, cb) {
+  var state = this._writableState;
+
+  if (typeof chunk === 'function') {
+    cb = chunk;
+    chunk = null;
+    encoding = null;
+  } else if (typeof encoding === 'function') {
+    cb = encoding;
+    encoding = null;
+  }
+
+  if (typeof chunk !== 'undefined' && chunk !== null)
+    this.write(chunk, encoding);
+
+  // ignore unnecessary end() calls.
+  if (!state.ending && !state.finished)
+    endWritable(this, state, cb);
+};
+
+
+function needFinish(stream, state) {
+  return (state.ending &&
+          state.length === 0 &&
+          !state.finished &&
+          !state.writing);
+}
+
+function finishMaybe(stream, state) {
+  var need = needFinish(stream, state);
+  if (need) {
+    state.finished = true;
+    stream.emit('finish');
+  }
+  return need;
+}
+
+function endWritable(stream, state, cb) {
+  state.ending = true;
+  finishMaybe(stream, state);
+  if (cb) {
+    if (state.finished)
+      setImmediate(cb);
+    else
+      stream.once('finish', cb);
+  }
+  state.ended = true;
+}
+
+},{"./index.js":85,"buffer":70,"inherits":78,"process/browser.js":86}],91:[function(_dereq_,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+var Buffer = _dereq_('buffer').Buffer;
+
+function assertEncoding(encoding) {
+  if (encoding && !Buffer.isEncoding(encoding)) {
+    throw new Error('Unknown encoding: ' + encoding);
+  }
+}
+
+var StringDecoder = exports.StringDecoder = function(encoding) {
+  this.encoding = (encoding || 'utf8').toLowerCase().replace(/[-_]/, '');
+  assertEncoding(encoding);
+  switch (this.encoding) {
+    case 'utf8':
+      // CESU-8 represents each of Surrogate Pair by 3-bytes
+      this.surrogateSize = 3;
+      break;
+    case 'ucs2':
+    case 'utf16le':
+      // UTF-16 represents each of Surrogate Pair by 2-bytes
+      this.surrogateSize = 2;
+      this.detectIncompleteChar = utf16DetectIncompleteChar;
+      break;
+    case 'base64':
+      // Base-64 stores 3 bytes in 4 chars, and pads the remainder.
+      this.surrogateSize = 3;
+      this.detectIncompleteChar = base64DetectIncompleteChar;
+      break;
+    default:
+      this.write = passThroughWrite;
+      return;
+  }
+
+  this.charBuffer = new Buffer(6);
+  this.charReceived = 0;
+  this.charLength = 0;
+};
+
+
+StringDecoder.prototype.write = function(buffer) {
+  var charStr = '';
+  var offset = 0;
+
+  // if our last write ended with an incomplete multibyte character
+  while (this.charLength) {
+    // determine how many remaining bytes this buffer has to offer for this char
+    var i = (buffer.length >= this.charLength - this.charReceived) ?
+                this.charLength - this.charReceived :
+                buffer.length;
+
+    // add the new bytes to the char buffer
+    buffer.copy(this.charBuffer, this.charReceived, offset, i);
+    this.charReceived += (i - offset);
+    offset = i;
+
+    if (this.charReceived < this.charLength) {
+      // still not enough chars in this buffer? wait for more ...
+      return '';
+    }
+
+    // get the character that was split
+    charStr = this.charBuffer.slice(0, this.charLength).toString(this.encoding);
+
+    // lead surrogate (D800-DBFF) is also the incomplete character
+    var charCode = charStr.charCodeAt(charStr.length - 1);
+    if (charCode >= 0xD800 && charCode <= 0xDBFF) {
+      this.charLength += this.surrogateSize;
+      charStr = '';
+      continue;
+    }
+    this.charReceived = this.charLength = 0;
+
+    // if there are no more bytes in this buffer, just emit our char
+    if (i == buffer.length) return charStr;
+
+    // otherwise cut off the characters end from the beginning of this buffer
+    buffer = buffer.slice(i, buffer.length);
+    break;
+  }
+
+  var lenIncomplete = this.detectIncompleteChar(buffer);
+
+  var end = buffer.length;
+  if (this.charLength) {
+    // buffer the incomplete character bytes we got
+    buffer.copy(this.charBuffer, 0, buffer.length - lenIncomplete, end);
+    this.charReceived = lenIncomplete;
+    end -= lenIncomplete;
+  }
+
+  charStr += buffer.toString(this.encoding, 0, end);
+
+  var end = charStr.length - 1;
+  var charCode = charStr.charCodeAt(end);
+  // lead surrogate (D800-DBFF) is also the incomplete character
+  if (charCode >= 0xD800 && charCode <= 0xDBFF) {
+    var size = this.surrogateSize;
+    this.charLength += size;
+    this.charReceived += size;
+    this.charBuffer.copy(this.charBuffer, size, 0, size);
+    this.charBuffer.write(charStr.charAt(charStr.length - 1), this.encoding);
+    return charStr.substring(0, end);
+  }
+
+  // or just emit the charStr
+  return charStr;
+};
+
+StringDecoder.prototype.detectIncompleteChar = function(buffer) {
+  // determine how many bytes we have to check at the end of this buffer
+  var i = (buffer.length >= 3) ? 3 : buffer.length;
+
+  // Figure out if one of the last i bytes of our buffer announces an
+  // incomplete char.
+  for (; i > 0; i--) {
+    var c = buffer[buffer.length - i];
+
+    // See http://en.wikipedia.org/wiki/UTF-8#Description
+
+    // 110XXXXX
+    if (i == 1 && c >> 5 == 0x06) {
+      this.charLength = 2;
+      break;
+    }
+
+    // 1110XXXX
+    if (i <= 2 && c >> 4 == 0x0E) {
+      this.charLength = 3;
+      break;
+    }
+
+    // 11110XXX
+    if (i <= 3 && c >> 3 == 0x1E) {
+      this.charLength = 4;
+      break;
+    }
+  }
+
+  return i;
+};
+
+StringDecoder.prototype.end = function(buffer) {
+  var res = '';
+  if (buffer && buffer.length)
+    res = this.write(buffer);
+
+  if (this.charReceived) {
+    var cr = this.charReceived;
+    var buf = this.charBuffer;
+    var enc = this.encoding;
+    res += buf.slice(0, cr).toString(enc);
+  }
+
+  return res;
+};
+
+function passThroughWrite(buffer) {
+  return buffer.toString(this.encoding);
+}
+
+function utf16DetectIncompleteChar(buffer) {
+  var incomplete = this.charReceived = buffer.length % 2;
+  this.charLength = incomplete ? 2 : 0;
+  return incomplete;
+}
+
+function base64DetectIncompleteChar(buffer) {
+  var incomplete = this.charReceived = buffer.length % 3;
+  this.charLength = incomplete ? 3 : 0;
+  return incomplete;
+}
+
+},{"buffer":70}],92:[function(_dereq_,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+var punycode = _dereq_('punycode');
+
+exports.parse = urlParse;
+exports.resolve = urlResolve;
+exports.resolveObject = urlResolveObject;
+exports.format = urlFormat;
+
+exports.Url = Url;
+
+function Url() {
+  this.protocol = null;
+  this.slashes = null;
+  this.auth = null;
+  this.host = null;
+  this.port = null;
+  this.hostname = null;
+  this.hash = null;
+  this.search = null;
+  this.query = null;
+  this.pathname = null;
+  this.path = null;
+  this.href = null;
+}
+
+// Reference: RFC 3986, RFC 1808, RFC 2396
+
+// define these here so at least they only have to be
+// compiled once on the first module load.
+var protocolPattern = /^([a-z0-9.+-]+:)/i,
+    portPattern = /:[0-9]*$/,
+
+    // RFC 2396: characters reserved for delimiting URLs.
+    // We actually just auto-escape these.
+    delims = ['<', '>', '"', '`', ' ', '\r', '\n', '\t'],
+
+    // RFC 2396: characters not allowed for various reasons.
+    unwise = ['{', '}', '|', '\\', '^', '`'].concat(delims),
+
+    // Allowed by RFCs, but cause of XSS attacks.  Always escape these.
+    autoEscape = ['\''].concat(unwise),
+    // Characters that are never ever allowed in a hostname.
+    // Note that any invalid chars are also handled, but these
+    // are the ones that are *expected* to be seen, so we fast-path
+    // them.
+    nonHostChars = ['%', '/', '?', ';', '#'].concat(autoEscape),
+    hostEndingChars = ['/', '?', '#'],
+    hostnameMaxLen = 255,
+    hostnamePartPattern = /^[a-z0-9A-Z_-]{0,63}$/,
+    hostnamePartStart = /^([a-z0-9A-Z_-]{0,63})(.*)$/,
+    // protocols that can allow "unsafe" and "unwise" chars.
+    unsafeProtocol = {
+      'javascript': true,
+      'javascript:': true
+    },
+    // protocols that never have a hostname.
+    hostlessProtocol = {
+      'javascript': true,
+      'javascript:': true
+    },
+    // protocols that always contain a // bit.
+    slashedProtocol = {
+      'http': true,
+      'https': true,
+      'ftp': true,
+      'gopher': true,
+      'file': true,
+      'http:': true,
+      'https:': true,
+      'ftp:': true,
+      'gopher:': true,
+      'file:': true
+    },
+    querystring = _dereq_('querystring');
+
+function urlParse(url, parseQueryString, slashesDenoteHost) {
+  if (url && isObject(url) && url instanceof Url) return url;
+
+  var u = new Url;
+  u.parse(url, parseQueryString, slashesDenoteHost);
+  return u;
+}
+
+Url.prototype.parse = function(url, parseQueryString, slashesDenoteHost) {
+  if (!isString(url)) {
+    throw new TypeError("Parameter 'url' must be a string, not " + typeof url);
+  }
+
+  var rest = url;
+
+  // trim before proceeding.
+  // This is to support parse stuff like "  http://foo.com  \n"
+  rest = rest.trim();
+
+  var proto = protocolPattern.exec(rest);
+  if (proto) {
+    proto = proto[0];
+    var lowerProto = proto.toLowerCase();
+    this.protocol = lowerProto;
+    rest = rest.substr(proto.length);
+  }
+
+  // figure out if it's got a host
+  // user@server is *always* interpreted as a hostname, and url
+  // resolution will treat //foo/bar as host=foo,path=bar because that's
+  // how the browser resolves relative URLs.
+  if (slashesDenoteHost || proto || rest.match(/^\/\/[^@\/]+@[^@\/]+/)) {
+    var slashes = rest.substr(0, 2) === '//';
+    if (slashes && !(proto && hostlessProtocol[proto])) {
+      rest = rest.substr(2);
+      this.slashes = true;
+    }
+  }
+
+  if (!hostlessProtocol[proto] &&
+      (slashes || (proto && !slashedProtocol[proto]))) {
+
+    // there's a hostname.
+    // the first instance of /, ?, ;, or # ends the host.
+    //
+    // If there is an @ in the hostname, then non-host chars *are* allowed
+    // to the left of the last @ sign, unless some host-ending character
+    // comes *before* the @-sign.
+    // URLs are obnoxious.
+    //
+    // ex:
+    // http://a@b@c/ => user:a@b host:c
+    // http://a@b?@c => user:a host:c path:/?@c
+
+    // v0.12 TODO(isaacs): This is not quite how Chrome does things.
+    // Review our test case against browsers more comprehensively.
+
+    // find the first instance of any hostEndingChars
+    var hostEnd = -1;
+    for (var i = 0; i < hostEndingChars.length; i++) {
+      var hec = rest.indexOf(hostEndingChars[i]);
+      if (hec !== -1 && (hostEnd === -1 || hec < hostEnd))
+        hostEnd = hec;
+    }
+
+    // at this point, either we have an explicit point where the
+    // auth portion cannot go past, or the last @ char is the decider.
+    var auth, atSign;
+    if (hostEnd === -1) {
+      // atSign can be anywhere.
+      atSign = rest.lastIndexOf('@');
+    } else {
+      // atSign must be in auth portion.
+      // http://a@b/c@d => host:b auth:a path:/c@d
+      atSign = rest.lastIndexOf('@', hostEnd);
+    }
+
+    // Now we have a portion which is definitely the auth.
+    // Pull that off.
+    if (atSign !== -1) {
+      auth = rest.slice(0, atSign);
+      rest = rest.slice(atSign + 1);
+      this.auth = decodeURIComponent(auth);
+    }
+
+    // the host is the remaining to the left of the first non-host char
+    hostEnd = -1;
+    for (var i = 0; i < nonHostChars.length; i++) {
+      var hec = rest.indexOf(nonHostChars[i]);
+      if (hec !== -1 && (hostEnd === -1 || hec < hostEnd))
+        hostEnd = hec;
+    }
+    // if we still have not hit it, then the entire thing is a host.
+    if (hostEnd === -1)
+      hostEnd = rest.length;
+
+    this.host = rest.slice(0, hostEnd);
+    rest = rest.slice(hostEnd);
+
+    // pull out port.
+    this.parseHost();
+
+    // we've indicated that there is a hostname,
+    // so even if it's empty, it has to be present.
+    this.hostname = this.hostname || '';
+
+    // if hostname begins with [ and ends with ]
+    // assume that it's an IPv6 address.
+    var ipv6Hostname = this.hostname[0] === '[' &&
+        this.hostname[this.hostname.length - 1] === ']';
+
+    // validate a little.
+    if (!ipv6Hostname) {
+      var hostparts = this.hostname.split(/\./);
+      for (var i = 0, l = hostparts.length; i < l; i++) {
+        var part = hostparts[i];
+        if (!part) continue;
+        if (!part.match(hostnamePartPattern)) {
+          var newpart = '';
+          for (var j = 0, k = part.length; j < k; j++) {
+            if (part.charCodeAt(j) > 127) {
+              // we replace non-ASCII char with a temporary placeholder
+              // we need this to make sure size of hostname is not
+              // broken by replacing non-ASCII by nothing
+              newpart += 'x';
+            } else {
+              newpart += part[j];
+            }
+          }
+          // we test again with ASCII char only
+          if (!newpart.match(hostnamePartPattern)) {
+            var validParts = hostparts.slice(0, i);
+            var notHost = hostparts.slice(i + 1);
+            var bit = part.match(hostnamePartStart);
+            if (bit) {
+              validParts.push(bit[1]);
+              notHost.unshift(bit[2]);
+            }
+            if (notHost.length) {
+              rest = '/' + notHost.join('.') + rest;
+            }
+            this.hostname = validParts.join('.');
+            break;
+          }
+        }
+      }
+    }
+
+    if (this.hostname.length > hostnameMaxLen) {
+      this.hostname = '';
+    } else {
+      // hostnames are always lower case.
+      this.hostname = this.hostname.toLowerCase();
+    }
+
+    if (!ipv6Hostname) {
+      // IDNA Support: Returns a puny coded representation of "domain".
+      // It only converts the part of the domain name that
+      // has non ASCII characters. I.e. it dosent matter if
+      // you call it with a domain that already is in ASCII.
+      var domainArray = this.hostname.split('.');
+      var newOut = [];
+      for (var i = 0; i < domainArray.length; ++i) {
+        var s = domainArray[i];
+        newOut.push(s.match(/[^A-Za-z0-9_-]/) ?
+            'xn--' + punycode.encode(s) : s);
+      }
+      this.hostname = newOut.join('.');
+    }
+
+    var p = this.port ? ':' + this.port : '';
+    var h = this.hostname || '';
+    this.host = h + p;
+    this.href += this.host;
+
+    // strip [ and ] from the hostname
+    // the host field still retains them, though
+    if (ipv6Hostname) {
+      this.hostname = this.hostname.substr(1, this.hostname.length - 2);
+      if (rest[0] !== '/') {
+        rest = '/' + rest;
+      }
+    }
+  }
+
+  // now rest is set to the post-host stuff.
+  // chop off any delim chars.
+  if (!unsafeProtocol[lowerProto]) {
+
+    // First, make 100% sure that any "autoEscape" chars get
+    // escaped, even if encodeURIComponent doesn't think they
+    // need to be.
+    for (var i = 0, l = autoEscape.length; i < l; i++) {
+      var ae = autoEscape[i];
+      var esc = encodeURIComponent(ae);
+      if (esc === ae) {
+        esc = escape(ae);
+      }
+      rest = rest.split(ae).join(esc);
+    }
+  }
+
+
+  // chop off from the tail first.
+  var hash = rest.indexOf('#');
+  if (hash !== -1) {
+    // got a fragment string.
+    this.hash = rest.substr(hash);
+    rest = rest.slice(0, hash);
+  }
+  var qm = rest.indexOf('?');
+  if (qm !== -1) {
+    this.search = rest.substr(qm);
+    this.query = rest.substr(qm + 1);
+    if (parseQueryString) {
+      this.query = querystring.parse(this.query);
+    }
+    rest = rest.slice(0, qm);
+  } else if (parseQueryString) {
+    // no query string, but parseQueryString still requested
+    this.search = '';
+    this.query = {};
+  }
+  if (rest) this.pathname = rest;
+  if (slashedProtocol[lowerProto] &&
+      this.hostname && !this.pathname) {
+    this.pathname = '/';
+  }
+
+  //to support http.request
+  if (this.pathname || this.search) {
+    var p = this.pathname || '';
+    var s = this.search || '';
+    this.path = p + s;
+  }
+
+  // finally, reconstruct the href based on what has been validated.
+  this.href = this.format();
+  return this;
+};
+
+// format a parsed object into a url string
+function urlFormat(obj) {
+  // ensure it's an object, and not a string url.
+  // If it's an obj, this is a no-op.
+  // this way, you can call url_format() on strings
+  // to clean up potentially wonky urls.
+  if (isString(obj)) obj = urlParse(obj);
+  if (!(obj instanceof Url)) return Url.prototype.format.call(obj);
+  return obj.format();
+}
+
+Url.prototype.format = function() {
+  var auth = this.auth || '';
+  if (auth) {
+    auth = encodeURIComponent(auth);
+    auth = auth.replace(/%3A/i, ':');
+    auth += '@';
+  }
+
+  var protocol = this.protocol || '',
+      pathname = this.pathname || '',
+      hash = this.hash || '',
+      host = false,
+      query = '';
+
+  if (this.host) {
+    host = auth + this.host;
+  } else if (this.hostname) {
+    host = auth + (this.hostname.indexOf(':') === -1 ?
+        this.hostname :
+        '[' + this.hostname + ']');
+    if (this.port) {
+      host += ':' + this.port;
+    }
+  }
+
+  if (this.query &&
+      isObject(this.query) &&
+      Object.keys(this.query).length) {
+    query = querystring.stringify(this.query);
+  }
+
+  var search = this.search || (query && ('?' + query)) || '';
+
+  if (protocol && protocol.substr(-1) !== ':') protocol += ':';
+
+  // only the slashedProtocols get the //.  Not mailto:, xmpp:, etc.
+  // unless they had them to begin with.
+  if (this.slashes ||
+      (!protocol || slashedProtocol[protocol]) && host !== false) {
+    host = '//' + (host || '');
+    if (pathname && pathname.charAt(0) !== '/') pathname = '/' + pathname;
+  } else if (!host) {
+    host = '';
+  }
+
+  if (hash && hash.charAt(0) !== '#') hash = '#' + hash;
+  if (search && search.charAt(0) !== '?') search = '?' + search;
+
+  pathname = pathname.replace(/[?#]/g, function(match) {
+    return encodeURIComponent(match);
+  });
+  search = search.replace('#', '%23');
+
+  return protocol + host + pathname + search + hash;
+};
+
+function urlResolve(source, relative) {
+  return urlParse(source, false, true).resolve(relative);
+}
+
+Url.prototype.resolve = function(relative) {
+  return this.resolveObject(urlParse(relative, false, true)).format();
+};
+
+function urlResolveObject(source, relative) {
+  if (!source) return relative;
+  return urlParse(source, false, true).resolveObject(relative);
+}
+
+Url.prototype.resolveObject = function(relative) {
+  if (isString(relative)) {
+    var rel = new Url();
+    rel.parse(relative, false, true);
+    relative = rel;
+  }
+
+  var result = new Url();
+  Object.keys(this).forEach(function(k) {
+    result[k] = this[k];
+  }, this);
+
+  // hash is always overridden, no matter what.
+  // even href="" will remove it.
+  result.hash = relative.hash;
+
+  // if the relative url is empty, then there's nothing left to do here.
+  if (relative.href === '') {
+    result.href = result.format();
+    return result;
+  }
+
+  // hrefs like //foo/bar always cut to the protocol.
+  if (relative.slashes && !relative.protocol) {
+    // take everything except the protocol from relative
+    Object.keys(relative).forEach(function(k) {
+      if (k !== 'protocol')
+        result[k] = relative[k];
+    });
+
+    //urlParse appends trailing / to urls like http://www.example.com
+    if (slashedProtocol[result.protocol] &&
+        result.hostname && !result.pathname) {
+      result.path = result.pathname = '/';
+    }
+
+    result.href = result.format();
+    return result;
+  }
+
+  if (relative.protocol && relative.protocol !== result.protocol) {
+    // if it's a known url protocol, then changing
+    // the protocol does weird things
+    // first, if it's not file:, then we MUST have a host,
+    // and if there was a path
+    // to begin with, then we MUST have a path.
+    // if it is file:, then the host is dropped,
+    // because that's known to be hostless.
+    // anything else is assumed to be absolute.
+    if (!slashedProtocol[relative.protocol]) {
+      Object.keys(relative).forEach(function(k) {
+        result[k] = relative[k];
+      });
+      result.href = result.format();
+      return result;
+    }
+
+    result.protocol = relative.protocol;
+    if (!relative.host && !hostlessProtocol[relative.protocol]) {
+      var relPath = (relative.pathname || '').split('/');
+      while (relPath.length && !(relative.host = relPath.shift()));
+      if (!relative.host) relative.host = '';
+      if (!relative.hostname) relative.hostname = '';
+      if (relPath[0] !== '') relPath.unshift('');
+      if (relPath.length < 2) relPath.unshift('');
+      result.pathname = relPath.join('/');
+    } else {
+      result.pathname = relative.pathname;
+    }
+    result.search = relative.search;
+    result.query = relative.query;
+    result.host = relative.host || '';
+    result.auth = relative.auth;
+    result.hostname = relative.hostname || relative.host;
+    result.port = relative.port;
+    // to support http.request
+    if (result.pathname || result.search) {
+      var p = result.pathname || '';
+      var s = result.search || '';
+      result.path = p + s;
+    }
+    result.slashes = result.slashes || relative.slashes;
+    result.href = result.format();
+    return result;
+  }
+
+  var isSourceAbs = (result.pathname && result.pathname.charAt(0) === '/'),
+      isRelAbs = (
+          relative.host ||
+          relative.pathname && relative.pathname.charAt(0) === '/'
+      ),
+      mustEndAbs = (isRelAbs || isSourceAbs ||
+                    (result.host && relative.pathname)),
+      removeAllDots = mustEndAbs,
+      srcPath = result.pathname && result.pathname.split('/') || [],
+      relPath = relative.pathname && relative.pathname.split('/') || [],
+      psychotic = result.protocol && !slashedProtocol[result.protocol];
+
+  // if the url is a non-slashed url, then relative
+  // links like ../.. should be able
+  // to crawl up to the hostname, as well.  This is strange.
+  // result.protocol has already been set by now.
+  // Later on, put the first path part into the host field.
+  if (psychotic) {
+    result.hostname = '';
+    result.port = null;
+    if (result.host) {
+      if (srcPath[0] === '') srcPath[0] = result.host;
+      else srcPath.unshift(result.host);
+    }
+    result.host = '';
+    if (relative.protocol) {
+      relative.hostname = null;
+      relative.port = null;
+      if (relative.host) {
+        if (relPath[0] === '') relPath[0] = relative.host;
+        else relPath.unshift(relative.host);
+      }
+      relative.host = null;
+    }
+    mustEndAbs = mustEndAbs && (relPath[0] === '' || srcPath[0] === '');
+  }
+
+  if (isRelAbs) {
+    // it's absolute.
+    result.host = (relative.host || relative.host === '') ?
+                  relative.host : result.host;
+    result.hostname = (relative.hostname || relative.hostname === '') ?
+                      relative.hostname : result.hostname;
+    result.search = relative.search;
+    result.query = relative.query;
+    srcPath = relPath;
+    // fall through to the dot-handling below.
+  } else if (relPath.length) {
+    // it's relative
+    // throw away the existing file, and take the new path instead.
+    if (!srcPath) srcPath = [];
+    srcPath.pop();
+    srcPath = srcPath.concat(relPath);
+    result.search = relative.search;
+    result.query = relative.query;
+  } else if (!isNullOrUndefined(relative.search)) {
+    // just pull out the search.
+    // like href='?foo'.
+    // Put this after the other two cases because it simplifies the booleans
+    if (psychotic) {
+      result.hostname = result.host = srcPath.shift();
+      //occationaly the auth can get stuck only in host
+      //this especialy happens in cases like
+      //url.resolveObject('mailto:local1@domain1', 'local2@domain2')
+      var authInHost = result.host && result.host.indexOf('@') > 0 ?
+                       result.host.split('@') : false;
+      if (authInHost) {
+        result.auth = authInHost.shift();
+        result.host = result.hostname = authInHost.shift();
+      }
+    }
+    result.search = relative.search;
+    result.query = relative.query;
+    //to support http.request
+    if (!isNull(result.pathname) || !isNull(result.search)) {
+      result.path = (result.pathname ? result.pathname : '') +
+                    (result.search ? result.search : '');
+    }
+    result.href = result.format();
+    return result;
+  }
+
+  if (!srcPath.length) {
+    // no path at all.  easy.
+    // we've already handled the other stuff above.
+    result.pathname = null;
+    //to support http.request
+    if (result.search) {
+      result.path = '/' + result.search;
+    } else {
+      result.path = null;
+    }
+    result.href = result.format();
+    return result;
+  }
+
+  // if a url ENDs in . or .., then it must get a trailing slash.
+  // however, if it ends in anything else non-slashy,
+  // then it must NOT get a trailing slash.
+  var last = srcPath.slice(-1)[0];
+  var hasTrailingSlash = (
+      (result.host || relative.host) && (last === '.' || last === '..') ||
+      last === '');
+
+  // strip single dots, resolve double dots to parent dir
+  // if the path tries to go above the root, `up` ends up > 0
+  var up = 0;
+  for (var i = srcPath.length; i >= 0; i--) {
+    last = srcPath[i];
+    if (last == '.') {
+      srcPath.splice(i, 1);
+    } else if (last === '..') {
+      srcPath.splice(i, 1);
+      up++;
+    } else if (up) {
+      srcPath.splice(i, 1);
+      up--;
+    }
+  }
+
+  // if the path is allowed to go above the root, restore leading ..s
+  if (!mustEndAbs && !removeAllDots) {
+    for (; up--; up) {
+      srcPath.unshift('..');
+    }
+  }
+
+  if (mustEndAbs && srcPath[0] !== '' &&
+      (!srcPath[0] || srcPath[0].charAt(0) !== '/')) {
+    srcPath.unshift('');
+  }
+
+  if (hasTrailingSlash && (srcPath.join('/').substr(-1) !== '/')) {
+    srcPath.push('');
+  }
+
+  var isAbsolute = srcPath[0] === '' ||
+      (srcPath[0] && srcPath[0].charAt(0) === '/');
+
+  // put the host back
+  if (psychotic) {
+    result.hostname = result.host = isAbsolute ? '' :
+                                    srcPath.length ? srcPath.shift() : '';
+    //occationaly the auth can get stuck only in host
+    //this especialy happens in cases like
+    //url.resolveObject('mailto:local1@domain1', 'local2@domain2')
+    var authInHost = result.host && result.host.indexOf('@') > 0 ?
+                     result.host.split('@') : false;
+    if (authInHost) {
+      result.auth = authInHost.shift();
+      result.host = result.hostname = authInHost.shift();
+    }
+  }
+
+  mustEndAbs = mustEndAbs || (result.host && srcPath.length);
+
+  if (mustEndAbs && !isAbsolute) {
+    srcPath.unshift('');
+  }
+
+  if (!srcPath.length) {
+    result.pathname = null;
+    result.path = null;
+  } else {
+    result.pathname = srcPath.join('/');
+  }
+
+  //to support request.http
+  if (!isNull(result.pathname) || !isNull(result.search)) {
+    result.path = (result.pathname ? result.pathname : '') +
+                  (result.search ? result.search : '');
+  }
+  result.auth = relative.auth || result.auth;
+  result.slashes = result.slashes || relative.slashes;
+  result.href = result.format();
+  return result;
+};
+
+Url.prototype.parseHost = function() {
+  var host = this.host;
+  var port = portPattern.exec(host);
+  if (port) {
+    port = port[0];
+    if (port !== ':') {
+      this.port = port.substr(1);
+    }
+    host = host.substr(0, host.length - port.length);
+  }
+  if (host) this.hostname = host;
+};
+
+function isString(arg) {
+  return typeof arg === "string";
+}
+
+function isObject(arg) {
+  return typeof arg === 'object' && arg !== null;
+}
+
+function isNull(arg) {
+  return arg === null;
+}
+function isNullOrUndefined(arg) {
+  return  arg == null;
+}
+
+},{"punycode":80,"querystring":83}],93:[function(_dereq_,module,exports){
+module.exports = function isBuffer(arg) {
+  return arg && typeof arg === 'object'
+    && typeof arg.copy === 'function'
+    && typeof arg.fill === 'function'
+    && typeof arg.readUInt8 === 'function';
+}
+},{}],94:[function(_dereq_,module,exports){
+(function (process,global){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+var formatRegExp = /%[sdj%]/g;
+exports.format = function(f) {
+  if (!isString(f)) {
+    var objects = [];
+    for (var i = 0; i < arguments.length; i++) {
+      objects.push(inspect(arguments[i]));
+    }
+    return objects.join(' ');
+  }
+
+  var i = 1;
+  var args = arguments;
+  var len = args.length;
+  var str = String(f).replace(formatRegExp, function(x) {
+    if (x === '%%') return '%';
+    if (i >= len) return x;
+    switch (x) {
+      case '%s': return String(args[i++]);
+      case '%d': return Number(args[i++]);
+      case '%j':
+        try {
+          return JSON.stringify(args[i++]);
+        } catch (_) {
+          return '[Circular]';
+        }
+      default:
+        return x;
+    }
+  });
+  for (var x = args[i]; i < len; x = args[++i]) {
+    if (isNull(x) || !isObject(x)) {
+      str += ' ' + x;
+    } else {
+      str += ' ' + inspect(x);
+    }
+  }
+  return str;
+};
+
+
+// Mark that a method should not be used.
+// Returns a modified function which warns once by default.
+// If --no-deprecation is set, then it is a no-op.
+exports.deprecate = function(fn, msg) {
+  // Allow for deprecating things in the process of starting up.
+  if (isUndefined(global.process)) {
+    return function() {
+      return exports.deprecate(fn, msg).apply(this, arguments);
+    };
+  }
+
+  if (process.noDeprecation === true) {
+    return fn;
+  }
+
+  var warned = false;
+  function deprecated() {
+    if (!warned) {
+      if (process.throwDeprecation) {
+        throw new Error(msg);
+      } else if (process.traceDeprecation) {
+        console.trace(msg);
+      } else {
+        console.error(msg);
+      }
+      warned = true;
+    }
+    return fn.apply(this, arguments);
+  }
+
+  return deprecated;
+};
+
+
+var debugs = {};
+var debugEnviron;
+exports.debuglog = function(set) {
+  if (isUndefined(debugEnviron))
+    debugEnviron = process.env.NODE_DEBUG || '';
+  set = set.toUpperCase();
+  if (!debugs[set]) {
+    if (new RegExp('\\b' + set + '\\b', 'i').test(debugEnviron)) {
+      var pid = process.pid;
+      debugs[set] = function() {
+        var msg = exports.format.apply(exports, arguments);
+        console.error('%s %d: %s', set, pid, msg);
+      };
+    } else {
+      debugs[set] = function() {};
+    }
+  }
+  return debugs[set];
+};
+
+
+/**
+ * Echos the value of a value. Trys to print the value out
+ * in the best way possible given the different types.
+ *
+ * @param {Object} obj The object to print out.
+ * @param {Object} opts Optional options object that alters the output.
+ */
+/* legacy: obj, showHidden, depth, colors*/
+function inspect(obj, opts) {
+  // default options
+  var ctx = {
+    seen: [],
+    stylize: stylizeNoColor
+  };
+  // legacy...
+  if (arguments.length >= 3) ctx.depth = arguments[2];
+  if (arguments.length >= 4) ctx.colors = arguments[3];
+  if (isBoolean(opts)) {
+    // legacy...
+    ctx.showHidden = opts;
+  } else if (opts) {
+    // got an "options" object
+    exports._extend(ctx, opts);
+  }
+  // set default options
+  if (isUndefined(ctx.showHidden)) ctx.showHidden = false;
+  if (isUndefined(ctx.depth)) ctx.depth = 2;
+  if (isUndefined(ctx.colors)) ctx.colors = false;
+  if (isUndefined(ctx.customInspect)) ctx.customInspect = true;
+  if (ctx.colors) ctx.stylize = stylizeWithColor;
+  return formatValue(ctx, obj, ctx.depth);
+}
+exports.inspect = inspect;
+
+
+// http://en.wikipedia.org/wiki/ANSI_escape_code#graphics
+inspect.colors = {
+  'bold' : [1, 22],
+  'italic' : [3, 23],
+  'underline' : [4, 24],
+  'inverse' : [7, 27],
+  'white' : [37, 39],
+  'grey' : [90, 39],
+  'black' : [30, 39],
+  'blue' : [34, 39],
+  'cyan' : [36, 39],
+  'green' : [32, 39],
+  'magenta' : [35, 39],
+  'red' : [31, 39],
+  'yellow' : [33, 39]
+};
+
+// Don't use 'blue' not visible on cmd.exe
+inspect.styles = {
+  'special': 'cyan',
+  'number': 'yellow',
+  'boolean': 'yellow',
+  'undefined': 'grey',
+  'null': 'bold',
+  'string': 'green',
+  'date': 'magenta',
+  // "name": intentionally not styling
+  'regexp': 'red'
+};
+
+
+function stylizeWithColor(str, styleType) {
+  var style = inspect.styles[styleType];
+
+  if (style) {
+    return '\u001b[' + inspect.colors[style][0] + 'm' + str +
+           '\u001b[' + inspect.colors[style][1] + 'm';
+  } else {
+    return str;
+  }
+}
+
+
+function stylizeNoColor(str, styleType) {
+  return str;
+}
+
+
+function arrayToHash(array) {
+  var hash = {};
+
+  array.forEach(function(val, idx) {
+    hash[val] = true;
+  });
+
+  return hash;
+}
+
+
+function formatValue(ctx, value, recurseTimes) {
+  // Provide a hook for user-specified inspect functions.
+  // Check that value is an object with an inspect function on it
+  if (ctx.customInspect &&
+      value &&
+      isFunction(value.inspect) &&
+      // Filter out the util module, it's inspect function is special
+      value.inspect !== exports.inspect &&
+      // Also filter out any prototype objects using the circular check.
+      !(value.constructor && value.constructor.prototype === value)) {
+    var ret = value.inspect(recurseTimes, ctx);
+    if (!isString(ret)) {
+      ret = formatValue(ctx, ret, recurseTimes);
+    }
+    return ret;
+  }
+
+  // Primitive types cannot have properties
+  var primitive = formatPrimitive(ctx, value);
+  if (primitive) {
+    return primitive;
+  }
+
+  // Look up the keys of the object.
+  var keys = Object.keys(value);
+  var visibleKeys = arrayToHash(keys);
+
+  if (ctx.showHidden) {
+    keys = Object.getOwnPropertyNames(value);
+  }
+
+  // IE doesn't make error fields non-enumerable
+  // http://msdn.microsoft.com/en-us/library/ie/dww52sbt(v=vs.94).aspx
+  if (isError(value)
+      && (keys.indexOf('message') >= 0 || keys.indexOf('description') >= 0)) {
+    return formatError(value);
+  }
+
+  // Some type of object without properties can be shortcutted.
+  if (keys.length === 0) {
+    if (isFunction(value)) {
+      var name = value.name ? ': ' + value.name : '';
+      return ctx.stylize('[Function' + name + ']', 'special');
+    }
+    if (isRegExp(value)) {
+      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
+    }
+    if (isDate(value)) {
+      return ctx.stylize(Date.prototype.toString.call(value), 'date');
+    }
+    if (isError(value)) {
+      return formatError(value);
+    }
+  }
+
+  var base = '', array = false, braces = ['{', '}'];
+
+  // Make Array say that they are Array
+  if (isArray(value)) {
+    array = true;
+    braces = ['[', ']'];
+  }
+
+  // Make functions say that they are functions
+  if (isFunction(value)) {
+    var n = value.name ? ': ' + value.name : '';
+    base = ' [Function' + n + ']';
+  }
+
+  // Make RegExps say that they are RegExps
+  if (isRegExp(value)) {
+    base = ' ' + RegExp.prototype.toString.call(value);
+  }
+
+  // Make dates with properties first say the date
+  if (isDate(value)) {
+    base = ' ' + Date.prototype.toUTCString.call(value);
+  }
+
+  // Make error with message first say the error
+  if (isError(value)) {
+    base = ' ' + formatError(value);
+  }
+
+  if (keys.length === 0 && (!array || value.length == 0)) {
+    return braces[0] + base + braces[1];
+  }
+
+  if (recurseTimes < 0) {
+    if (isRegExp(value)) {
+      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
+    } else {
+      return ctx.stylize('[Object]', 'special');
+    }
+  }
+
+  ctx.seen.push(value);
+
+  var output;
+  if (array) {
+    output = formatArray(ctx, value, recurseTimes, visibleKeys, keys);
+  } else {
+    output = keys.map(function(key) {
+      return formatProperty(ctx, value, recurseTimes, visibleKeys, key, array);
+    });
+  }
+
+  ctx.seen.pop();
+
+  return reduceToSingleString(output, base, braces);
+}
+
+
+function formatPrimitive(ctx, value) {
+  if (isUndefined(value))
+    return ctx.stylize('undefined', 'undefined');
+  if (isString(value)) {
+    var simple = '\'' + JSON.stringify(value).replace(/^"|"$/g, '')
+                                             .replace(/'/g, "\\'")
+                                             .replace(/\\"/g, '"') + '\'';
+    return ctx.stylize(simple, 'string');
+  }
+  if (isNumber(value))
+    return ctx.stylize('' + value, 'number');
+  if (isBoolean(value))
+    return ctx.stylize('' + value, 'boolean');
+  // For some reason typeof null is "object", so special case here.
+  if (isNull(value))
+    return ctx.stylize('null', 'null');
+}
+
+
+function formatError(value) {
+  return '[' + Error.prototype.toString.call(value) + ']';
+}
+
+
+function formatArray(ctx, value, recurseTimes, visibleKeys, keys) {
+  var output = [];
+  for (var i = 0, l = value.length; i < l; ++i) {
+    if (hasOwnProperty(value, String(i))) {
+      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
+          String(i), true));
+    } else {
+      output.push('');
+    }
+  }
+  keys.forEach(function(key) {
+    if (!key.match(/^\d+$/)) {
+      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
+          key, true));
+    }
+  });
+  return output;
+}
+
+
+function formatProperty(ctx, value, recurseTimes, visibleKeys, key, array) {
+  var name, str, desc;
+  desc = Object.getOwnPropertyDescriptor(value, key) || { value: value[key] };
+  if (desc.get) {
+    if (desc.set) {
+      str = ctx.stylize('[Getter/Setter]', 'special');
+    } else {
+      str = ctx.stylize('[Getter]', 'special');
+    }
+  } else {
+    if (desc.set) {
+      str = ctx.stylize('[Setter]', 'special');
+    }
+  }
+  if (!hasOwnProperty(visibleKeys, key)) {
+    name = '[' + key + ']';
+  }
+  if (!str) {
+    if (ctx.seen.indexOf(desc.value) < 0) {
+      if (isNull(recurseTimes)) {
+        str = formatValue(ctx, desc.value, null);
+      } else {
+        str = formatValue(ctx, desc.value, recurseTimes - 1);
+      }
+      if (str.indexOf('\n') > -1) {
+        if (array) {
+          str = str.split('\n').map(function(line) {
+            return '  ' + line;
+          }).join('\n').substr(2);
+        } else {
+          str = '\n' + str.split('\n').map(function(line) {
+            return '   ' + line;
+          }).join('\n');
+        }
+      }
+    } else {
+      str = ctx.stylize('[Circular]', 'special');
+    }
+  }
+  if (isUndefined(name)) {
+    if (array && key.match(/^\d+$/)) {
+      return str;
+    }
+    name = JSON.stringify('' + key);
+    if (name.match(/^"([a-zA-Z_][a-zA-Z_0-9]*)"$/)) {
+      name = name.substr(1, name.length - 2);
+      name = ctx.stylize(name, 'name');
+    } else {
+      name = name.replace(/'/g, "\\'")
+                 .replace(/\\"/g, '"')
+                 .replace(/(^"|"$)/g, "'");
+      name = ctx.stylize(name, 'string');
+    }
+  }
+
+  return name + ': ' + str;
+}
+
+
+function reduceToSingleString(output, base, braces) {
+  var numLinesEst = 0;
+  var length = output.reduce(function(prev, cur) {
+    numLinesEst++;
+    if (cur.indexOf('\n') >= 0) numLinesEst++;
+    return prev + cur.replace(/\u001b\[\d\d?m/g, '').length + 1;
+  }, 0);
+
+  if (length > 60) {
+    return braces[0] +
+           (base === '' ? '' : base + '\n ') +
+           ' ' +
+           output.join(',\n  ') +
+           ' ' +
+           braces[1];
+  }
+
+  return braces[0] + base + ' ' + output.join(', ') + ' ' + braces[1];
+}
+
+
+// NOTE: These type checking functions intentionally don't use `instanceof`
+// because it is fragile and can be easily faked with `Object.create()`.
+function isArray(ar) {
+  return Array.isArray(ar);
+}
+exports.isArray = isArray;
+
+function isBoolean(arg) {
+  return typeof arg === 'boolean';
+}
+exports.isBoolean = isBoolean;
+
+function isNull(arg) {
+  return arg === null;
+}
+exports.isNull = isNull;
+
+function isNullOrUndefined(arg) {
+  return arg == null;
+}
+exports.isNullOrUndefined = isNullOrUndefined;
+
+function isNumber(arg) {
+  return typeof arg === 'number';
+}
+exports.isNumber = isNumber;
+
+function isString(arg) {
+  return typeof arg === 'string';
+}
+exports.isString = isString;
+
+function isSymbol(arg) {
+  return typeof arg === 'symbol';
+}
+exports.isSymbol = isSymbol;
+
+function isUndefined(arg) {
+  return arg === void 0;
+}
+exports.isUndefined = isUndefined;
+
+function isRegExp(re) {
+  return isObject(re) && objectToString(re) === '[object RegExp]';
+}
+exports.isRegExp = isRegExp;
+
+function isObject(arg) {
+  return typeof arg === 'object' && arg !== null;
+}
+exports.isObject = isObject;
+
+function isDate(d) {
+  return isObject(d) && objectToString(d) === '[object Date]';
+}
+exports.isDate = isDate;
+
+function isError(e) {
+  return isObject(e) &&
+      (objectToString(e) === '[object Error]' || e instanceof Error);
+}
+exports.isError = isError;
+
+function isFunction(arg) {
+  return typeof arg === 'function';
+}
+exports.isFunction = isFunction;
+
+function isPrimitive(arg) {
+  return arg === null ||
+         typeof arg === 'boolean' ||
+         typeof arg === 'number' ||
+         typeof arg === 'string' ||
+         typeof arg === 'symbol' ||  // ES6 symbol
+         typeof arg === 'undefined';
+}
+exports.isPrimitive = isPrimitive;
+
+exports.isBuffer = _dereq_('./support/isBuffer');
+
+function objectToString(o) {
+  return Object.prototype.toString.call(o);
+}
+
+
+function pad(n) {
+  return n < 10 ? '0' + n.toString(10) : n.toString(10);
+}
+
+
+var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
+              'Oct', 'Nov', 'Dec'];
+
+// 26 Feb 16:19:34
+function timestamp() {
+  var d = new Date();
+  var time = [pad(d.getHours()),
+              pad(d.getMinutes()),
+              pad(d.getSeconds())].join(':');
+  return [d.getDate(), months[d.getMonth()], time].join(' ');
+}
+
+
+// log is just a thin wrapper to console.log that prepends a timestamp
+exports.log = function() {
+  console.log('%s - %s', timestamp(), exports.format.apply(exports, arguments));
+};
+
+
+/**
+ * Inherit the prototype methods from one constructor into another.
+ *
+ * The Function.prototype.inherits from lang.js rewritten as a standalone
+ * function (not on Function.prototype). NOTE: If this file is to be loaded
+ * during bootstrapping this function needs to be rewritten using some native
+ * functions as prototype setup using normal JavaScript does not work as
+ * expected during bootstrapping (see mirror.js in r114903).
+ *
+ * @param {function} ctor Constructor function which needs to inherit the
+ *     prototype.
+ * @param {function} superCtor Constructor function to inherit prototype from.
+ */
+exports.inherits = _dereq_('inherits');
+
+exports._extend = function(origin, add) {
+  // Don't do anything if add isn't an object
+  if (!add || !isObject(add)) return origin;
+
+  var keys = Object.keys(add);
+  var i = keys.length;
+  while (i--) {
+    origin[keys[i]] = add[keys[i]];
+  }
+  return origin;
+};
+
+function hasOwnProperty(obj, prop) {
+  return Object.prototype.hasOwnProperty.call(obj, prop);
+}
+
+}).call(this,_dereq_("oMfpAn"),typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"./support/isBuffer":93,"inherits":78,"oMfpAn":79}],95:[function(_dereq_,module,exports){
 !function() {
 
 var Gibber = _dereq_( 'gibber.core.lib' )
@@ -34635,6 +43111,6 @@ Gibber.Communication = _dereq_( 'gibber.communication.lib' )( Gibber )
 module.exports = Gibber
 
 }()
-},{"gibber.audio.lib":4,"gibber.communication.lib":22,"gibber.core.lib":25,"gibber.graphics.lib":53,"gibber.interface.lib":60}]},{},[62])
-(62)
+},{"gibber.audio.lib":5,"gibber.communication.lib":28,"gibber.core.lib":33,"gibber.graphics.lib":61,"gibber.interface.lib":68}]},{},[95])
+(95)
 });
