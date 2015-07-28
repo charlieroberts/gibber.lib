@@ -165,7 +165,6 @@ param **Audio Event** : Object. The HTML5 audio event object.
       
       if(me.isDirty) {
         _callback = me.createCallback();
-        
         try{
           callback = me.callback = new Function( _callback[0], _callback[1] )
         }catch( e ) {
@@ -2000,6 +1999,8 @@ Gibberish.KarplusStrong = function() {
     properties: { blend:1, damping:0, amp:1, channels:2, pan:0  },
   
     note : function(frequency) {
+      if( typeof frequency === 'undefined' ) return
+
       var _size = Math.floor(sr / frequency);
       buffer.length = 0;
     
@@ -2420,8 +2421,6 @@ Gibberish.Curve = function( start, end, time, a, b, fadeIn, loops ) {
   b = b || .260
   loops = loops || false
   fadeIn = typeof fadeIn === 'undefined' ? 1 : fadeIn
-  
-  console.log("FADE IN", fadeIn )
   
 	var that = { 
 		name:		'curve',
@@ -3090,7 +3089,7 @@ Gibberish.Delay = function() {
   	name:"delay",
   	properties:{ input:0, time: 22050, feedback: .5, wet:1, dry:1, rate:1 },
 				
-  	callback : function(sample, time, feedback, wet, dry, rate ) {
+  	callback : function( sample, time, feedback, wet, dry, rate ) {
       var channels = typeof sample === 'number' ? 1 : 2;
       
   		var _phase = phase++ % 88200;
@@ -4593,6 +4592,7 @@ param **frequency** Number. The frequency for the oscillator.
 param **amp** Number. Optional. The volume to use.  
 **/    
 	this.note = function(frequency, amp) {
+    if( typeof frequency === 'undefined' ) return
     if( amp !== 0 ) {
   		if( typeof this.frequency !== 'object' ){
         if( useADSR && frequency === lastFrequency && properties.requireReleaseTrigger ) {
@@ -4738,6 +4738,8 @@ param **frequency** Number. The frequency for the oscillator.
 param **amp** Number. Optional. The volume to use.  
 **/  
     note : function(_frequency, amp) {
+      if( typeof _frequency === 'undefined' ) return
+
       var lastNoteIndex = this.frequencies.indexOf( _frequency ),
           idx = lastNoteIndex > -1 ? lastNoteIndex : this.voiceCount++,
           synth = this.children[ idx ];
@@ -4871,6 +4873,7 @@ param **frequency** Number. The frequency for the oscillator.
 param **amp** Number. Optional. The volume to use.  
 **/      
 	this.note = function(frequency, amp) {
+    if( typeof frequency === 'undefined' ) return
     if( amp !== 0 ) {
   		if(typeof this.frequency !== 'object'){
         if( useADSR && frequency === lastFrequency && properties.requireReleaseTrigger ) {
@@ -5020,6 +5023,8 @@ param **frequency** Number. The frequency for the oscillator.
 param **amp** Number. Optional. The volume to use.  
 **/  
     note : function(_frequency, amp) {
+      if( typeof _frequency === 'undefined' ) return
+
       var lastNoteIndex = this.frequencies.indexOf( _frequency ),
           idx = lastNoteIndex > -1 ? lastNoteIndex : this.voiceCount++,
           synth = this.children[ idx ];
@@ -5138,6 +5143,7 @@ param **amp** Number. Optional. The volume to use.
 **/
 
 	this.note = function(frequency, amp) {
+    if( typeof frequency === 'undefined' ) return
     //console.log( frequency, lastFrequency, this.releaseTrigger, amp )
     if( amp !== 0 ) {
   		if(typeof this.frequency !== 'object'){
@@ -5278,6 +5284,8 @@ param **frequency** Number. The frequency for the carrier oscillator. The modula
 param **amp** Number. Optional. The volume to use.  
 **/
     note : function(_frequency, amp) {
+      if( typeof _frequency === 'undefined' ) return
+
       var lastNoteIndex = this.frequencies.indexOf( _frequency ),
           idx = lastNoteIndex > -1 ? lastNoteIndex : this.voiceCount++,
           synth = this.children[ idx ];
@@ -5453,16 +5461,19 @@ param **buffer** Object. The decoded sampler buffers from the audio file
     
     switchBuffer: function( bufferID ) { // accepts either number or string
       if( typeof bufferID === 'string' ) {
-        if( typeof self.buffers[ bufferID ] !== 'undefined' ) {
-          buffer = self.buffers[ bufferID ]
-          bufferLength = self.end = self.length = buffer.length
+        if( typeof this.buffers[ bufferID ] !== 'undefined' ) {
+          buffer = this.buffers[ bufferID ]
+          bufferLength = this.end = this.length = buffer.length
         }
       }else if( typeof bufferID === 'number' ){
-        var keys = Object.keys( self.buffers )
+        var keys = Object.keys( this.buffers )
         if( keys.length === 0 ) return 
         //console.log( "KEY", keys, keys[ bufferID ], bufferID )
-        buffer = self.buffers[ keys[ bufferID ] ]
-        bufferLength = self.end = self.length = buffer.length
+        buffer = this.buffers[ keys[ bufferID ] ]
+        bufferLength  = this.length = buffer.length
+        this.end( bufferLength )
+        this.setPhase( 0 )
+        //console.log( bufferLength, this.end, this.length )
       }
     },
     
@@ -5543,7 +5554,8 @@ param **pitch** Number. The speed the sample is played back at.
 param **amp** Number. Optional. The volume to use.
 **/    
 		note: function(pitch, amp) {
-      
+      if( typeof pitch === 'undefined' ) return
+
       switch( typeof pitch ) {
         case 'number' :
           this.pitch = pitch
@@ -5870,6 +5882,8 @@ param **note or frequency** : String or Integer. You can pass a note name, such 
 param **amp** : Optional. Float. The volume of the note, usually between 0..1. The main amp property of the Synth will also affect note amplitude.
 **/				
 		note : function(_frequency, amp) {
+      if( typeof _frequency === 'undefined' ) return
+
       if(typeof amp !== 'undefined' && amp !== 0) this.amp = amp;
       
       if( amp !== 0 ) {
@@ -5885,6 +5899,8 @@ param **amp** : Optional. Float. The volume of the note, usually between 0..1. T
       }
 		},
   	_note : function(frequency, amp) {
+      if( typeof frequency === 'undefined' ) return
+        
   		if(typeof this.frequency !== 'object'){
         if( useADSR && frequency === lastFrequency && amp === 0) {
           this.releaseTrigger = 1;
@@ -8584,7 +8600,9 @@ Audio = {
   clear: function() {
     // Audio.analysisUgens.length = 0
     // Audio.sequencers.length = 0
-    var args = Array.prototype.slice.call( arguments, 0 )
+    var args = Array.prototype.slice.call( arguments, 0 ),
+        scaleSeqIsConnected = Audio.Theory.scale.seq.isConnected
+    
     
     for( var i = 0; i < Audio.Master.inputs.length; i++ ) {
       if( args.indexOf( Audio.Master.inputs[ i ].value) === -1 ) {
@@ -8605,6 +8623,10 @@ Audio = {
     Audio.Core.clear()
     
     Audio.Clock.seq.connect()
+    
+    if( scaleSeqIsConnected  ) {
+      Gibber.Theory.scale = Gibber.scale = Gibber.Audio.Theory.Scale( 'c4','Minor' )
+    }
     
     Audio.Core.out.addConnection( Audio.Master, 1 );
     Audio.Master.destinations.push( Audio.Core.out );
@@ -8851,7 +8873,7 @@ Audio.SoundFont =      _dereq_( './audio/soundfont' )( Gibber )
 Audio.Score =          _dereq_( './audio/score' )
 Audio.Ensemble =       _dereq_( './audio/ensemble' )( Gibber )
 Audio.Ugen =           _dereq_( './audio/ugen')( Gibber )
-Audio.Additive =       _dereq_( './audio/additive')
+Audio.Additive =       _dereq_( './audio/additive' )
 
 return Audio
 
@@ -9483,6 +9505,7 @@ var Clock = {
       })
       
       Object.defineProperty(this, 'timeSignature', {
+        configurable:true,
         get: function() { return Clock.signature.upper + '/' + Clock.signature.lower },
         set: function(v) { 
           var values = v.split('/')
@@ -12514,6 +12537,7 @@ module.exports = function( Gibber ) {
       if( typeof obj.scale.notes[ idx ] === 'number' ) {
         freq = obj.scale.notes[ idx ]
       }else{
+        if( typeof idx === 'undefined' ) return // rest
         try{
           freq = obj.scale.notes[ idx ].fq()
         }catch(e) {
@@ -12602,7 +12626,7 @@ module.exports = function( Gibber ) {
             if( key === 'note' ) {
               valuesPattern.filters.push( function() { 
                 var output = arguments[ 0 ][ 0 ]
-                if( output < Gibber.minNoteFrequency ) {
+                if( output && output < Gibber.minNoteFrequency ) {
                   if( obj.scale ) {
                     output = obj.scale.notes[ output ]
                   }else{
@@ -12768,7 +12792,7 @@ module.exports = function( Gibber ) {
     
     seq.toString = function() { return '> Seq' }
     seq.gibber = true
-    
+     
     $.extend( seq, {
       constructor: Seq,
       replaceWith: function( replacement ) { this.kill() },
@@ -13115,6 +13139,7 @@ module.exports = function( Gibber ) {
         
         if( name === 'Mono' ) {
           obj.note = function( _frequency, amp ) {
+            if( typeof _frequency === 'undefined' ) return // rest
             if(typeof amp !== 'undefined' && amp !== 0) this.amp = amp;
               
             if( amp !== 0 ) {
@@ -13140,6 +13165,8 @@ module.exports = function( Gibber ) {
         obj.note = function() {
           var args = Array.prototype.splice.call( arguments, 0 )
           
+          if( typeof args[0] === 'undefined' ) return
+
           args[ 0 ] = Gibber.Theory.processFrequency( obj, args[ 0 ] )
           
           this._note.apply( this, args )
@@ -13670,9 +13697,9 @@ var Theory = {
       if( isNoteInteger ) {                      
         note  = scale.notes[ frequency  ]
       }else{
-        var noteFloor = scale.notes[ Math.floor( args[ 0 ] )  ],
-            noteCeil  = scale.notes[ Math.ceil( args[ 0 ] )  ],
-            float = args[0] % 1,
+        var noteFloor = scale.notes[ Math.floor( noteValue )  ],
+            noteCeil  = scale.notes[ Math.ceil( noteValue )  ],
+            float = noteValue % 1,
             diff = noteCeil - noteFloor
         
         note = noteFloor + float * diff
@@ -15058,6 +15085,12 @@ var Gibber = {
       obj.seq = Gibber.Audio.Seqs.Seq({ doNotStart:true, scale:obj.scale, priority:priority, target:obj })
     }
     
+    fnc.score = function( v,d,n ) {
+      return function() {
+        fnc.seq( v,d,n )
+      }
+    }
+    
     fnc.seq = function( _v,_d, num ) {
       var seq
       if( typeof _v === 'string' && ( obj.name === 'Drums' || obj.name === 'XOX' || obj.name === 'Ensemble' )) {
@@ -15216,8 +15249,8 @@ var Gibber = {
         fnc.values.filters.push( filter )
       }
     
-      fnc.score = function( __v__, __d__ ) {
-        return fnc.seq.bind( obj, __v__, __d__ )
+      fnc[ num ].score = function( __v__, __d__ ) {
+        return fnc.seq.bind( obj, __v__, __d__, num )
       }
     
       Object.defineProperties( fnc, {
@@ -16133,9 +16166,6 @@ var Pattern = function() {
     stepSize : 1,
     integersOnly : false,
     filters : [],
-    /*humanize: function() {
-      
-    },*/
     onchange : null,
 
     range : function() {
@@ -16178,7 +16208,34 @@ var Pattern = function() {
       
       return fnc;
     },
-    
+    // humanize: function( randomMin, randomMax ) {
+ //      var lastAmt = 0
+ //
+ //      for( var i = 0; i < this.filters.length; i++ ) {
+ //        if( this.filters[ i ].humanize ) {
+ //          lastAmt = this.filters[ i ].lastAmt
+ //          this.filters.splice( i, 1 )
+ //          break;
+ //        }
+ //      }
+ //
+ //      var filter = function( args ) {
+ //        console.log( filter.lastAmt, args[0])
+ //        args[ 0 ] -= filter.lastAmt
+ //        filter.lastAmt = Gibber.Clock.time( Gibber.Utilities.rndi( randomMin, randomMax ) )
+ //
+ //        console.log( "LA", filter.lastAmt )
+ //        args[0] += filter.lastAmt
+ //
+ //        return args
+ //      }
+ //      filter.lastAmt = lastAmt
+ //      filter.humanize = true
+ //
+ //      this.filters.push( filter )
+ //
+ //      return this
+ //    },
     repeat: function() {
       var counts = {}
     
@@ -20352,7 +20409,7 @@ module.exports = function( Gibber, Graphics ) {
         Graphics.modes['3d'].obj.remove()
       }
       
-      if( !_that.initialized ) Graphics.init( '2d', container )
+      if( !_that.intialized ) Graphics.init( '2d', container )
       
       _that.canvasObject.show()
       
@@ -20363,13 +20420,6 @@ module.exports = function( Gibber, Graphics ) {
          ctx = canvas.getContext( '2d' ),
          that = ctx,
          three = null;
-      //ctx.canvas = canvas
-      var __canvas = canvas
-      Object.defineProperty( ctx, 'canvas', {
-        get: function() { return __canvas },
-        set: function(v) { __canvas = v }
-      })
-      that.canvas = canvas
       
       $.extend( that, {
         top: 0,
@@ -21696,7 +21746,7 @@ Graphics = {
       // }
     }
     
-    console.log( "_MODE", _mode, this.mode )
+    console.log( "_MODE", _mode )
     if( _mode !== null && typeof _mode !== 'undefined' && _mode !== this.mode ) {
       this.modes[ _mode ].obj.hide()
     } 
